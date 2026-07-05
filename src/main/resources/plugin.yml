@@ -3,6 +3,7 @@ version: '${version}'
 
 main: io.github.aktnb.playerStats.PlayerStats
 api-version: '26.1'
+folia-supported: true
 
 commands:
   stats:

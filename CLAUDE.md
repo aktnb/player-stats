@@ -31,7 +31,7 @@ Because Folia uses per-region threading instead of Bukkit's single main thread, 
 
 - **`BukkitPluginScheduler`** — implementation for traditional Paper/Spigot, using `Bukkit.getScheduler()`.
 - **`PaperFoliaPluginScheduler`** — implementation for Folia. Since Folia-only scheduler APIs (`Server#getAsyncScheduler`, `Entity#getScheduler`) don't exist in the Paper API this project compiles against, this implementation calls them via **reflection**.
-- **`SchedulerFactory`** picks the right implementation at runtime by probing for the presence of `Server#getAsyncScheduler` (see `ServerPlatform` for the lower-level Folia/Paper class-existence checks used elsewhere).
+- **`SchedulerFactory`** picks the right implementation at runtime by probing for the presence of `Server#getAsyncScheduler` — this method exists on both Folia and modern Paper (non-Folia), so the check is a capability probe rather than a Folia-vs-Paper identity check; only legacy Spigot/CraftBukkit servers fall back to `BukkitPluginScheduler`.
 
 Any new code that needs to schedule work (async task, or getting back onto an entity's thread) must go through `PluginScheduler`, never call Bukkit/Folia scheduler APIs directly — otherwise it will break on one of the two platforms.
 
