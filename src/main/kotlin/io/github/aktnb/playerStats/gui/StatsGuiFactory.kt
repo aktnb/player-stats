@@ -14,8 +14,8 @@ import kotlin.math.max
 /**
  * 別プレイヤーのステータスを閲覧するための固定GUI(サイズ54)を組み立てる。
  *
- * サマリー画面ではピッケル(採掘数)・草ブロック(設置数)の2アイテムを並べ、残りは装飾用のガラス板で
- * 埋めた閲覧専用インベントリを返す。ピッケルクリックで開くブロック別採掘内訳画面(ページング付き)も
+ * サマリー画面ではピッケル(採掘数)・草ブロック(設置数)の2アイテムのみを配置し、残りのスロットは
+ * 何も置かない閲覧専用インベントリを返す。ピッケルクリックで開くブロック別採掘内訳画面(ページング付き)も
  * 本オブジェクトが組み立てる。
  */
 object StatsGuiFactory {
@@ -37,11 +37,6 @@ object StatsGuiFactory {
         val title = Component.text("$targetName のステータス", NamedTextColor.GOLD)
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
-
-        val filler = createFiller()
-        for (slot in 0 until inventory.size) {
-            inventory.setItem(slot, filler)
-        }
 
         inventory.setItem(
             PICKAXE_SLOT,
@@ -73,11 +68,6 @@ object StatsGuiFactory {
         val title = Component.text("$targetName の採掘内訳 (${clampedPage + 1}/$totalPages)", NamedTextColor.GOLD)
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
-
-        val filler = createFiller()
-        for (slot in 0 until inventory.size) {
-            inventory.setItem(slot, filler)
-        }
 
         if (breakdown.isEmpty()) {
             inventory.setItem(PLACEHOLDER_SLOT, createPlaceholderItem())
@@ -147,16 +137,6 @@ object StatsGuiFactory {
                         .append(Component.text(value.toString(), NamedTextColor.WHITE))
                         .decoration(TextDecoration.ITALIC, false)
                 )
-            )
-        }
-        return item
-    }
-
-    private fun createFiller(): ItemStack {
-        val item = ItemStack(Material.GRAY_STAINED_GLASS_PANE)
-        item.editMeta { meta ->
-            meta.displayName(
-                Component.text(" ").decoration(TextDecoration.ITALIC, false)
             )
         }
         return item
