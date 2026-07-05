@@ -27,7 +27,11 @@ object StatsGuiFactory {
 
     internal const val ITEMS_PER_PAGE = 45
     internal const val PREV_PAGE_SLOT = 45
+    internal const val COUNT_ASC_SORT_SLOT = 46
+    internal const val COUNT_DESC_SORT_SLOT = 47
     internal const val BACK_SLOT = 49
+    internal const val NAME_ASC_SORT_SLOT = 51
+    internal const val NAME_DESC_SORT_SLOT = 52
     internal const val NEXT_PAGE_SLOT = 53
     internal const val PLACEHOLDER_SLOT = 22
 
@@ -62,12 +66,19 @@ object StatsGuiFactory {
         return inventory
     }
 
-    fun buildDetail(targetName: String, type: StatDetailType, breakdown: List<MaterialStatCount>, page: Int): Inventory {
+    fun buildDetail(
+        targetName: String,
+        type: StatDetailType,
+        breakdown: List<MaterialStatCount>,
+        page: Int,
+        sort: StatDetailSort = StatDetailSort.COUNT_DESC,
+    ): Inventory {
+        val sortedBreakdown = sortBreakdown(breakdown, sort)
         val totalPages = totalPages(breakdown.size)
         val clampedPage = page.coerceIn(0, totalPages - 1)
 
-        val holder = StatsDetailGuiHolder(targetName, type, breakdown, clampedPage)
-        val title = createTitle(targetName, " の${type.titleLabel} (${clampedPage + 1}/$totalPages)")
+        val holder = StatsDetailGuiHolder(targetName, type, breakdown, clampedPage, sort)
+        val title = createTitle(targetName, " の${type.titleLabel} (${clampedPage + 1}/$totalPages ${sort.label})")
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
@@ -76,7 +87,7 @@ object StatsGuiFactory {
         } else {
             val fromIndex = clampedPage * ITEMS_PER_PAGE
             val toIndex = minOf(fromIndex + ITEMS_PER_PAGE, breakdown.size)
-            for ((slot, entry) in breakdown.subList(fromIndex, toIndex).withIndex()) {
+            for ((slot, entry) in sortedBreakdown.subList(fromIndex, toIndex).withIndex()) {
                 inventory.setItem(slot, createBreakdownItem(entry.material, entry.count, type.loreLabel))
             }
         }
@@ -88,8 +99,34 @@ object StatsGuiFactory {
             inventory.setItem(NEXT_PAGE_SLOT, createNavItem(Material.ARROW, "次のページ ▶"))
         }
         inventory.setItem(BACK_SLOT, createNavItem(Material.OAK_DOOR, "戻る"))
+        inventory.setItem(
+            COUNT_ASC_SORT_SLOT,
+            createSortItem(Material.HOPPER, "昇順", sort == StatDetailSort.COUNT_ASC)
+        )
+        inventory.setItem(
+            COUNT_DESC_SORT_SLOT,
+            createSortItem(Material.CHEST, "降順", sort == StatDetailSort.COUNT_DESC)
+        )
+        inventory.setItem(
+            NAME_ASC_SORT_SLOT,
+            createSortItem(Material.NAME_TAG, "辞書順", sort == StatDetailSort.NAME_ASC)
+        )
+        inventory.setItem(
+            NAME_DESC_SORT_SLOT,
+            createSortItem(Material.WRITABLE_BOOK, "辞書逆順", sort == StatDetailSort.NAME_DESC)
+        )
 
         return inventory
+    }
+
+    private fun sortBreakdown(breakdown: List<MaterialStatCount>, sort: StatDetailSort): List<MaterialStatCount> {
+        val byName = compareBy<MaterialStatCount> { it.material.name }
+        return when (sort) {
+            StatDetailSort.COUNT_ASC -> breakdown.sortedWith(compareBy<MaterialStatCount> { it.count }.then(byName))
+            StatDetailSort.COUNT_DESC -> breakdown.sortedWith(compareByDescending<MaterialStatCount> { it.count }.then(byName))
+            StatDetailSort.NAME_ASC -> breakdown.sortedWith(byName.thenByDescending { it.count })
+            StatDetailSort.NAME_DESC -> breakdown.sortedWith(byName.reversed().thenByDescending { it.count })
+        }
     }
 
     private fun createTitle(targetName: String, suffix: String): Component =
@@ -125,6 +162,21 @@ object StatsGuiFactory {
         val item = ItemStack(material)
         item.editMeta { meta ->
             meta.displayName(Component.text(name, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+        }
+        return item
+    }
+
+    private fun createSortItem(material: Material, name: String, active: Boolean): ItemStack {
+        val item = ItemStack(material)
+        item.editMeta { meta ->
+            val color = if (active) NamedTextColor.GREEN else NamedTextColor.YELLOW
+            meta.displayName(Component.text(name, color).decoration(TextDecoration.ITALIC, false))
+            meta.lore(
+                listOf(
+                    Component.text(if (active) "現在の並び順" else "クリックで並び替え", NamedTextColor.GRAY)
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            )
         }
         return item
     }

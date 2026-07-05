@@ -10,6 +10,14 @@ enum class StatDetailType(val titleLabel: String, val loreLabel: String, val emp
     PLACEMENT("設置内訳", "設置数: ", "設置記録なし"),
 }
 
+/** ブロック別内訳の並び順。 */
+enum class StatDetailSort(val label: String) {
+    COUNT_ASC("昇順"),
+    COUNT_DESC("降順"),
+    NAME_ASC("辞書順"),
+    NAME_DESC("辞書逆順"),
+}
+
 /**
  * ステータス閲覧GUIであることを判定するためのマーカー用 [InventoryHolder]。
  *
@@ -50,4 +58,5 @@ class StatsDetailGuiHolder(
     val type: StatDetailType,
     val breakdown: List<MaterialStatCount>,
     val page: Int,
+    val sort: StatDetailSort,
 ) : StatsGuiHolder(targetName)

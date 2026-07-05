@@ -1,6 +1,7 @@
 package io.github.aktnb.playerStats.listener
 
 import io.github.aktnb.playerStats.gui.StatDetailType
+import io.github.aktnb.playerStats.gui.StatDetailSort
 import io.github.aktnb.playerStats.gui.StatsDetailGuiHolder
 import io.github.aktnb.playerStats.gui.StatsGuiFactory
 import io.github.aktnb.playerStats.gui.StatsGuiHolder
@@ -97,7 +98,13 @@ class StatsGuiListener(
                             scheduler.runEntity(viewer) {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
                                     viewer.openInventory(
-                                        StatsGuiFactory.buildDetail(holder.targetName, holder.type, holder.breakdown, holder.page - 1)
+                                        StatsGuiFactory.buildDetail(
+                                            holder.targetName,
+                                            holder.type,
+                                            holder.breakdown,
+                                            holder.page - 1,
+                                            holder.sort,
+                                        )
                                     )
                                 }
                             }
@@ -109,12 +116,22 @@ class StatsGuiListener(
                             scheduler.runEntity(viewer) {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
                                     viewer.openInventory(
-                                        StatsGuiFactory.buildDetail(holder.targetName, holder.type, holder.breakdown, holder.page + 1)
+                                        StatsGuiFactory.buildDetail(
+                                            holder.targetName,
+                                            holder.type,
+                                            holder.breakdown,
+                                            holder.page + 1,
+                                            holder.sort,
+                                        )
                                     )
                                 }
                             }
                         }
                     }
+                    StatsGuiFactory.COUNT_ASC_SORT_SLOT -> reopenDetailWithSort(holder, viewer, StatDetailSort.COUNT_ASC)
+                    StatsGuiFactory.COUNT_DESC_SORT_SLOT -> reopenDetailWithSort(holder, viewer, StatDetailSort.COUNT_DESC)
+                    StatsGuiFactory.NAME_ASC_SORT_SLOT -> reopenDetailWithSort(holder, viewer, StatDetailSort.NAME_ASC)
+                    StatsGuiFactory.NAME_DESC_SORT_SLOT -> reopenDetailWithSort(holder, viewer, StatDetailSort.NAME_DESC)
                 }
             }
         }
@@ -223,6 +240,26 @@ class StatsGuiListener(
                     }
                     clearTransition(viewer.uniqueId)
                 }
+            }
+        }
+    }
+
+    private fun reopenDetailWithSort(holder: StatsDetailGuiHolder, viewer: Player, sort: StatDetailSort) {
+        if (holder.sort == sort) {
+            return
+        }
+
+        scheduler.runEntity(viewer) {
+            if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
+                viewer.openInventory(
+                    StatsGuiFactory.buildDetail(
+                        holder.targetName,
+                        holder.type,
+                        holder.breakdown,
+                        page = 0,
+                        sort = sort,
+                    )
+                )
             }
         }
     }
