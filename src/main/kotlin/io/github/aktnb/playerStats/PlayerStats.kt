@@ -1,6 +1,7 @@
 package io.github.aktnb.playerStats
 
 import io.github.aktnb.playerStats.command.StatsCommand
+import io.github.aktnb.playerStats.listener.StatsGuiListener
 import io.github.aktnb.playerStats.listener.StatsListener
 import io.github.aktnb.playerStats.repository.SQLiteProvider
 import io.github.aktnb.playerStats.repository.StatsRepository
@@ -39,6 +40,11 @@ class PlayerStats : JavaPlugin() {
 
             server.pluginManager.registerEvents(
                 StatsListener(buffer),
+                this
+            )
+
+            server.pluginManager.registerEvents(
+                StatsGuiListener(repository = repository, scheduler = scheduler),
                 this
             )
 
