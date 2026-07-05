@@ -14,7 +14,7 @@ object VanillaStatsReader {
     private val blockMaterials: List<Material> = Material.values()
         .filter { !it.isLegacy && it.isBlock }
 
-    private val placeableBlockMaterials: List<Material> = blockMaterials.filter { it.isItem }
+    private val itemizableBlockMaterials: List<Material> = blockMaterials.filter { it.isItem }
 
     fun read(player: OfflinePlayer): PlayerVanillaStats {
         var blocksMined = 0L
@@ -23,7 +23,7 @@ object VanillaStatsReader {
         }
 
         var blocksPlaced = 0L
-        for (material in placeableBlockMaterials) {
+        for (material in itemizableBlockMaterials) {
             blocksPlaced += getStatisticSafely(player, Statistic.USE_ITEM, material)
         }
 
@@ -31,6 +31,18 @@ object VanillaStatsReader {
             blocksMined = blocksMined,
             blocksPlaced = blocksPlaced,
         )
+    }
+
+    /**
+     * ブロック別の採掘数内訳を返す。`itemizableBlockMaterials`(isItemなブロックのみ)を対象とするため、
+     * 水・溶岩など非アイテム化ブロックは内訳に含まれない。したがって本関数が返すリストの合計値は
+     * [read] が返す `blocksMined`(全ブロック対象)と厳密には一致しない場合がある。
+     */
+    fun readMiningBreakdown(player: OfflinePlayer): List<MaterialMiningCount> {
+        return itemizableBlockMaterials
+            .map { MaterialMiningCount(it, getStatisticSafely(player, Statistic.MINE_BLOCK, it).toLong()) }
+            .filter { it.count > 0 }
+            .sortedWith(compareByDescending<MaterialMiningCount> { it.count }.thenBy { it.material.name })
     }
 
     /**

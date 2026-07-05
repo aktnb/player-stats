@@ -1,5 +1,6 @@
 package io.github.aktnb.playerStats.gui
 
+import io.github.aktnb.playerStats.stats.MaterialMiningCount
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -7,22 +8,34 @@ import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
+import kotlin.math.ceil
+import kotlin.math.max
 
 /**
- * 別プレイヤーのステータスを閲覧するための固定GUI(サイズ9・1列)を組み立てる。
+ * 別プレイヤーのステータスを閲覧するための固定GUI(サイズ54)を組み立てる。
  *
- * ピッケル(採掘数)・草ブロック(設置数)の2アイテムのみを並べ、
- * 残りは装飾用のガラス板で埋めた閲覧専用インベントリを返す。
+ * サマリー画面ではピッケル(採掘数)・草ブロック(設置数)の2アイテムを並べ、残りは装飾用のガラス板で
+ * 埋めた閲覧専用インベントリを返す。ピッケルクリックで開くブロック別採掘内訳画面(ページング付き)も
+ * 本オブジェクトが組み立てる。
  */
 object StatsGuiFactory {
 
-    private const val PICKAXE_SLOT = 3
-    private const val GRASS_SLOT = 5
+    internal const val PICKAXE_SLOT = 3
+    internal const val GRASS_SLOT = 5
+
+    internal const val ITEMS_PER_PAGE = 45
+    internal const val PREV_PAGE_SLOT = 45
+    internal const val BACK_SLOT = 49
+    internal const val NEXT_PAGE_SLOT = 53
+    internal const val PLACEHOLDER_SLOT = 22
+
+    /** 内訳エントリ数から総ページ数(最低1)を求める。空でも1ページ分は確保する。 */
+    internal fun totalPages(size: Int): Int = max(1, ceil(size / ITEMS_PER_PAGE.toDouble()).toInt())
 
     fun build(targetName: String, blocksMined: Long, blocksPlaced: Long): Inventory {
-        val holder = StatsGuiHolder()
+        val holder = StatsSummaryGuiHolder(targetName)
         val title = Component.text("$targetName のステータス", NamedTextColor.GOLD)
-        val inventory = Bukkit.createInventory(holder, 9, title)
+        val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
         val filler = createFiller()
@@ -50,6 +63,73 @@ object StatsGuiFactory {
         )
 
         return inventory
+    }
+
+    fun buildMiningDetail(targetName: String, breakdown: List<MaterialMiningCount>, page: Int): Inventory {
+        val totalPages = totalPages(breakdown.size)
+        val clampedPage = page.coerceIn(0, totalPages - 1)
+
+        val holder = StatsMiningDetailGuiHolder(targetName, breakdown, clampedPage)
+        val title = Component.text("$targetName の採掘内訳 (${clampedPage + 1}/$totalPages)", NamedTextColor.GOLD)
+        val inventory = Bukkit.createInventory(holder, 54, title)
+        holder.setInventory(inventory)
+
+        val filler = createFiller()
+        for (slot in 0 until inventory.size) {
+            inventory.setItem(slot, filler)
+        }
+
+        if (breakdown.isEmpty()) {
+            inventory.setItem(PLACEHOLDER_SLOT, createPlaceholderItem())
+        } else {
+            val fromIndex = clampedPage * ITEMS_PER_PAGE
+            val toIndex = minOf(fromIndex + ITEMS_PER_PAGE, breakdown.size)
+            for ((slot, entry) in breakdown.subList(fromIndex, toIndex).withIndex()) {
+                inventory.setItem(slot, createBreakdownItem(entry.material, entry.count))
+            }
+        }
+
+        if (clampedPage > 0) {
+            inventory.setItem(PREV_PAGE_SLOT, createNavItem(Material.ARROW, "◀ 前のページ"))
+        }
+        if (clampedPage < totalPages - 1) {
+            inventory.setItem(NEXT_PAGE_SLOT, createNavItem(Material.ARROW, "次のページ ▶"))
+        }
+        inventory.setItem(BACK_SLOT, createNavItem(Material.OAK_DOOR, "戻る"))
+
+        return inventory
+    }
+
+    private fun createBreakdownItem(material: Material, count: Long): ItemStack {
+        val item = ItemStack(material)
+        item.editMeta { meta ->
+            meta.lore(
+                listOf(
+                    Component.text("採掘数: ", NamedTextColor.GRAY)
+                        .append(Component.text(count.toString(), NamedTextColor.WHITE))
+                        .decoration(TextDecoration.ITALIC, false)
+                )
+            )
+        }
+        return item
+    }
+
+    private fun createPlaceholderItem(): ItemStack {
+        val item = ItemStack(Material.BARRIER)
+        item.editMeta { meta ->
+            meta.displayName(
+                Component.text("採掘記録なし", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)
+            )
+        }
+        return item
+    }
+
+    private fun createNavItem(material: Material, name: String): ItemStack {
+        val item = ItemStack(material)
+        item.editMeta { meta ->
+            meta.displayName(Component.text(name, NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false))
+        }
+        return item
     }
 
     private fun createItem(
