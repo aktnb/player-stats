@@ -1,0 +1,5 @@
+name: player-stats
+version: '${version}'
+
+main: io.github.aktnb.playerStats.PlayerStats
+api-version: '26.1'
