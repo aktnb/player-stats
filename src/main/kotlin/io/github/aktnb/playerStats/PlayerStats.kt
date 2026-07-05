@@ -1,6 +1,7 @@
 package io.github.aktnb.playerStats
 
 import io.github.aktnb.playerStats.command.StatsCommand
+import io.github.aktnb.playerStats.listener.StatsGuiListener
 import io.github.aktnb.playerStats.scheduler.PluginScheduler
 import io.github.aktnb.playerStats.scheduler.SchedulerFactory
 import org.bukkit.plugin.java.JavaPlugin
@@ -13,6 +14,11 @@ class PlayerStats : JavaPlugin() {
         logger.info("Enabling PlayerStats")
         try {
             scheduler = SchedulerFactory.create(this)
+
+            server.pluginManager.registerEvents(
+                StatsGuiListener(scheduler = scheduler),
+                this
+            )
 
             val statsCommand = getCommand("stats")
             if (statsCommand == null) {

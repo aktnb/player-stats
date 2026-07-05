@@ -1,5 +1,6 @@
 package io.github.aktnb.playerStats.command
 
+import io.github.aktnb.playerStats.gui.StatsGuiFactory
 import io.github.aktnb.playerStats.scheduler.PluginScheduler
 import io.github.aktnb.playerStats.stats.VanillaStatsReader
 import net.kyori.adventure.text.Component
@@ -34,20 +35,16 @@ class StatsCommand(
             try {
                 val stats = VanillaStatsReader.read(player)
 
-                player.sendMessage(Component.text("===== Your Stats =====", NamedTextColor.GOLD))
-                player.sendMessage(
-                    Component.text("採掘数: ", NamedTextColor.GRAY)
-                        .append(Component.text(stats.blocksMined.toString(), NamedTextColor.WHITE))
+                val inventory = StatsGuiFactory.build(
+                    targetName = player.name,
+                    blocksMined = stats.blocksMined,
+                    blocksPlaced = stats.blocksPlaced,
                 )
-                player.sendMessage(
-                    Component.text("設置数: ", NamedTextColor.GRAY)
-                        .append(Component.text(stats.blocksPlaced.toString(), NamedTextColor.WHITE))
-                )
-                player.sendMessage(Component.text("======================", NamedTextColor.GOLD))
+                player.openInventory(inventory)
             } catch (e: Exception) {
                 // Defensive fallback: VanillaStatsReader only throws on truly unexpected
                 // errors (its own IllegalArgumentException cases are already handled),
-                // and sendMessage/Adventure calls could theoretically fail too.
+                // and openInventory/Adventure calls could theoretically fail too.
                 e.printStackTrace()
                 player.sendMessage(
                     Component.text("統計データの取得に失敗しました。", NamedTextColor.RED)
