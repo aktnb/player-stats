@@ -3,3 +3,8 @@ version: '${version}'
 
 main: io.github.aktnb.playerStats.PlayerStats
 api-version: '26.1'
+
+commands:
+  stats:
+    description: Show your player stats
+    usage: /stats
