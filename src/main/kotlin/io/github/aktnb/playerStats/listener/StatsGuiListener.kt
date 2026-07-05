@@ -1,8 +1,9 @@
 package io.github.aktnb.playerStats.listener
 
+import io.github.aktnb.playerStats.gui.StatDetailType
+import io.github.aktnb.playerStats.gui.StatsDetailGuiHolder
 import io.github.aktnb.playerStats.gui.StatsGuiFactory
 import io.github.aktnb.playerStats.gui.StatsGuiHolder
-import io.github.aktnb.playerStats.gui.StatsMiningDetailGuiHolder
 import io.github.aktnb.playerStats.gui.StatsSummaryGuiHolder
 import io.github.aktnb.playerStats.scheduler.PluginScheduler
 import io.github.aktnb.playerStats.stats.VanillaStatsReader
@@ -26,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap
  * 統計の読み取りは対象プレイヤー(target)自身が所有するエンティティスレッドで行う必要がある
  * (Folia対応)ため、`runEntity(target)` で読み取ってから `runEntity(interactor)` へホップして
  * GUIを開く二段構えにしている。GUI内での一切の操作(クリック・ドラッグ)はキャンセルして閲覧専用にする。
- * サマリー画面のピッケルクリックでブロック別採掘内訳画面へ、内訳画面の各ボタンでページ送り・サマリー復帰を行う。
+ * サマリー画面のピッケル/草ブロックのクリックでそれぞれ採掘/設置のブロック別内訳画面へ、
+ * 内訳画面の各ボタンでページ送り・サマリー復帰を行う。
  */
 class StatsGuiListener(
     private val scheduler: PluginScheduler,
@@ -80,11 +82,14 @@ class StatsGuiListener(
 
         when (holder) {
             is StatsSummaryGuiHolder -> {
-                if (event.rawSlot == StatsGuiFactory.PICKAXE_SLOT) {
-                    openMiningDetailGui(holder.targetName, viewer, page = 0, expectedHolder = holder)
+                when (event.rawSlot) {
+                    StatsGuiFactory.PICKAXE_SLOT ->
+                        openDetailGui(holder.targetName, viewer, StatDetailType.MINING, page = 0, expectedHolder = holder)
+                    StatsGuiFactory.GRASS_SLOT ->
+                        openDetailGui(holder.targetName, viewer, StatDetailType.PLACEMENT, page = 0, expectedHolder = holder)
                 }
             }
-            is StatsMiningDetailGuiHolder -> {
+            is StatsDetailGuiHolder -> {
                 when (event.rawSlot) {
                     StatsGuiFactory.BACK_SLOT -> openSummaryGui(holder.targetName, viewer, expectedHolder = holder)
                     StatsGuiFactory.PREV_PAGE_SLOT -> {
@@ -92,7 +97,7 @@ class StatsGuiListener(
                             scheduler.runEntity(viewer) {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
                                     viewer.openInventory(
-                                        StatsGuiFactory.buildMiningDetail(holder.targetName, holder.breakdown, holder.page - 1)
+                                        StatsGuiFactory.buildDetail(holder.targetName, holder.type, holder.breakdown, holder.page - 1)
                                     )
                                 }
                             }
@@ -104,7 +109,7 @@ class StatsGuiListener(
                             scheduler.runEntity(viewer) {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
                                     viewer.openInventory(
-                                        StatsGuiFactory.buildMiningDetail(holder.targetName, holder.breakdown, holder.page + 1)
+                                        StatsGuiFactory.buildDetail(holder.targetName, holder.type, holder.breakdown, holder.page + 1)
                                     )
                                 }
                             }
@@ -173,7 +178,7 @@ class StatsGuiListener(
         }
     }
 
-    private fun openMiningDetailGui(targetName: String, viewer: Player, page: Int, expectedHolder: StatsGuiHolder?) {
+    private fun openDetailGui(targetName: String, viewer: Player, type: StatDetailType, page: Int, expectedHolder: StatsGuiHolder?) {
         val target = Bukkit.getPlayerExact(targetName)
         if (target == null || !target.isOnline) {
             viewer.sendMessage(Component.text("対象プレイヤーはオフラインです。", NamedTextColor.RED))
@@ -191,7 +196,10 @@ class StatsGuiListener(
                     clearTransition(viewer.uniqueId)
                     return@runEntity
                 }
-                val breakdown = VanillaStatsReader.readMiningBreakdown(target)
+                val breakdown = when (type) {
+                    StatDetailType.MINING -> VanillaStatsReader.readMiningBreakdown(target)
+                    StatDetailType.PLACEMENT -> VanillaStatsReader.readPlacementBreakdown(target)
+                }
                 val resolvedName = target.name
 
                 scheduler.runEntity(viewer) {
@@ -202,7 +210,7 @@ class StatsGuiListener(
                         if (expectedHolder != null && viewer.openInventory.topInventory.holder !== expectedHolder) {
                             return@runEntity
                         }
-                        viewer.openInventory(StatsGuiFactory.buildMiningDetail(resolvedName, breakdown, page))
+                        viewer.openInventory(StatsGuiFactory.buildDetail(resolvedName, type, breakdown, page))
                     } finally {
                         clearTransition(viewer.uniqueId)
                     }

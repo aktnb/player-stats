@@ -1,8 +1,14 @@
 package io.github.aktnb.playerStats.gui
 
-import io.github.aktnb.playerStats.stats.MaterialMiningCount
+import io.github.aktnb.playerStats.stats.MaterialStatCount
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.InventoryHolder
+
+/** ブロック別内訳の種別。表示文言をここに集約する。 */
+enum class StatDetailType(val titleLabel: String, val loreLabel: String, val emptyLabel: String) {
+    MINING("採掘内訳", "採掘数: ", "採掘記録なし"),
+    PLACEMENT("設置内訳", "設置数: ", "設置記録なし"),
+}
 
 /**
  * ステータス閲覧GUIであることを判定するためのマーカー用 [InventoryHolder]。
@@ -32,15 +38,16 @@ sealed class StatsGuiHolder(val targetName: String) : InventoryHolder {
 class StatsSummaryGuiHolder(targetName: String) : StatsGuiHolder(targetName)
 
 /**
- * ブロック別採掘内訳を表示するGUIのholder。
+ * ブロック別内訳(採掘/設置)を表示するGUIのholder。[type] で採掘/設置を区別する。
  *
  * [breakdown] はGUIを開いた時点のスナップショットをページ送りの間キャッシュとして使い回す
  * (ページ送りのたびにStatistic再読み取り・Foliaスレッドホップを発生させないため)。
- * そのため詳細GUIを開いている間に対象プレイヤーが採掘を続けると内容が古くなりうるが、
+ * そのため詳細GUIを開いている間に対象プレイヤーが採掘/設置を続けると内容が古くなりうるが、
  * 表示時間の短いGUIなので許容する。「戻る」ボタンではサマリーを都度再取得する。
  */
-class StatsMiningDetailGuiHolder(
+class StatsDetailGuiHolder(
     targetName: String,
-    val breakdown: List<MaterialMiningCount>,
+    val type: StatDetailType,
+    val breakdown: List<MaterialStatCount>,
     val page: Int,
 ) : StatsGuiHolder(targetName)

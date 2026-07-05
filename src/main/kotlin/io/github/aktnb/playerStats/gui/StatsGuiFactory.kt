@@ -1,6 +1,6 @@
 package io.github.aktnb.playerStats.gui
 
-import io.github.aktnb.playerStats.stats.MaterialMiningCount
+import io.github.aktnb.playerStats.stats.MaterialStatCount
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -15,8 +15,8 @@ import kotlin.math.max
  * 別プレイヤーのステータスを閲覧するための固定GUI(サイズ54)を組み立てる。
  *
  * サマリー画面ではピッケル(採掘数)・草ブロック(設置数)の2アイテムのみを配置し、残りのスロットは
- * 何も置かない閲覧専用インベントリを返す。ピッケルクリックで開くブロック別採掘内訳画面(ページング付き)も
- * 本オブジェクトが組み立てる。
+ * 何も置かない閲覧専用インベントリを返す。ピッケル/草ブロッククリックで開くブロック別内訳画面
+ * (採掘/設置・ページング付き)も本オブジェクトが組み立てる。
  */
 object StatsGuiFactory {
 
@@ -60,22 +60,22 @@ object StatsGuiFactory {
         return inventory
     }
 
-    fun buildMiningDetail(targetName: String, breakdown: List<MaterialMiningCount>, page: Int): Inventory {
+    fun buildDetail(targetName: String, type: StatDetailType, breakdown: List<MaterialStatCount>, page: Int): Inventory {
         val totalPages = totalPages(breakdown.size)
         val clampedPage = page.coerceIn(0, totalPages - 1)
 
-        val holder = StatsMiningDetailGuiHolder(targetName, breakdown, clampedPage)
-        val title = Component.text("$targetName の採掘内訳 (${clampedPage + 1}/$totalPages)", NamedTextColor.GOLD)
+        val holder = StatsDetailGuiHolder(targetName, type, breakdown, clampedPage)
+        val title = Component.text("$targetName の${type.titleLabel} (${clampedPage + 1}/$totalPages)", NamedTextColor.GOLD)
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
         if (breakdown.isEmpty()) {
-            inventory.setItem(PLACEHOLDER_SLOT, createPlaceholderItem())
+            inventory.setItem(PLACEHOLDER_SLOT, createPlaceholderItem(type.emptyLabel))
         } else {
             val fromIndex = clampedPage * ITEMS_PER_PAGE
             val toIndex = minOf(fromIndex + ITEMS_PER_PAGE, breakdown.size)
             for ((slot, entry) in breakdown.subList(fromIndex, toIndex).withIndex()) {
-                inventory.setItem(slot, createBreakdownItem(entry.material, entry.count))
+                inventory.setItem(slot, createBreakdownItem(entry.material, entry.count, type.loreLabel))
             }
         }
 
@@ -90,12 +90,12 @@ object StatsGuiFactory {
         return inventory
     }
 
-    private fun createBreakdownItem(material: Material, count: Long): ItemStack {
+    private fun createBreakdownItem(material: Material, count: Long, loreLabel: String): ItemStack {
         val item = ItemStack(material)
         item.editMeta { meta ->
             meta.lore(
                 listOf(
-                    Component.text("採掘数: ", NamedTextColor.GRAY)
+                    Component.text(loreLabel, NamedTextColor.GRAY)
                         .append(Component.text(count.toString(), NamedTextColor.WHITE))
                         .decoration(TextDecoration.ITALIC, false)
                 )
@@ -104,11 +104,11 @@ object StatsGuiFactory {
         return item
     }
 
-    private fun createPlaceholderItem(): ItemStack {
+    private fun createPlaceholderItem(emptyLabel: String): ItemStack {
         val item = ItemStack(Material.BARRIER)
         item.editMeta { meta ->
             meta.displayName(
-                Component.text("採掘記録なし", NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)
+                Component.text(emptyLabel, NamedTextColor.RED).decoration(TextDecoration.ITALIC, false)
             )
         }
         return item
