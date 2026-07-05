@@ -16,7 +16,7 @@ class PaperFoliaPluginScheduler(
             it.name == "runNow" && it.parameterTypes.size == 2
         }
 
-        runNowMethod.invoke(asyncScheduler, plugin, task)
+        runNowMethod.invoke(asyncScheduler, plugin, Consumer<Any> { task() })
     }
 
     override fun runAsyncTimer(initialDelayTicks: Long, periodTicks: Long, task: () -> Unit) {
