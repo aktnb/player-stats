@@ -30,8 +30,8 @@ The plugin follows a buffer → periodic flush → SQLite pattern to avoid block
 Because Folia uses per-region threading instead of Bukkit's single main thread, all scheduling goes through the **`PluginScheduler`** interface (`scheduler/PluginScheduler.kt`) rather than calling `Bukkit.getScheduler()` or entity schedulers directly:
 
 - **`BukkitPluginScheduler`** — implementation for traditional Paper/Spigot, using `Bukkit.getScheduler()`.
-- **`PaperFoliaPluginScheduler`** — implementation for Folia. Since Folia-only scheduler APIs (`Server#getAsyncScheduler`, `Entity#getScheduler`) don't exist in the Paper API this project compiles against, this implementation calls them via **reflection**.
-- **`SchedulerFactory`** picks the right implementation at runtime by probing for the presence of `Server#getAsyncScheduler` — this method exists on both Folia and modern Paper (non-Folia), so the check is a capability probe rather than a Folia-vs-Paper identity check; only legacy Spigot/CraftBukkit servers fall back to `BukkitPluginScheduler`.
+- **`PaperFoliaPluginScheduler`** — implementation for Folia. `Server#getAsyncScheduler`/`Entity#getScheduler` are typed public API in the Paper API version this project compiles against (26.1.2), so this implementation calls them directly — no reflection needed.
+- **`SchedulerFactory`** picks the right implementation at runtime by probing (via reflection, since legacy Spigot/CraftBukkit builds lack the method entirely) for the presence of `Server#getAsyncScheduler` — this method exists on both Folia and modern Paper (non-Folia), so the check is a capability probe rather than a Folia-vs-Paper identity check; only legacy Spigot/CraftBukkit servers fall back to `BukkitPluginScheduler`.
 
 Any new code that needs to schedule work (async task, or getting back onto an entity's thread) must go through `PluginScheduler`, never call Bukkit/Folia scheduler APIs directly — otherwise it will break on one of the two platforms.
 
