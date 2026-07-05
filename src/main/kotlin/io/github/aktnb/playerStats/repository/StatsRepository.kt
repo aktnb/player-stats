@@ -19,6 +19,7 @@ class StatsRepository(
                             blocks_mined INTEGER NOT NULL DEFAULT 0,
                             blocks_placed INTEGER NOT NULL DEFAULT 0,
                             last_seen_at INTEGER NOT NULL
+                        )
                     """.trimIndent()
                 )
             }
@@ -38,11 +39,11 @@ class StatsRepository(
                     blocks_mined,
                     blocks_placed,
                     last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (player_uuid) DO UPDATE SET
-                    player_name = excluded.player_name
-                    blocks_mined = player_stats.blocks_mined + excluded.blocks_mined
-                    blocks_placed = player_stats.blocks_placed + excluded.blocks_placed
+                    player_name = excluded.player_name,
+                    blocks_mined = player_stats.blocks_mined + excluded.blocks_mined,
+                    blocks_placed = player_stats.blocks_placed + excluded.blocks_placed,
                     last_seen_at = excluded.last_seen_at
             """.trimIndent()
 

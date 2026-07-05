@@ -17,6 +17,6 @@ class StatsListener(
 
     @EventHandler(ignoreCancelled = true)
     fun onBlockPlace(event: BlockPlaceEvent) {
-        buffer.addMined(event.player.uniqueId, event.player.name)
+        buffer.addPlaced(event.player.uniqueId, event.player.name)
     }
 }

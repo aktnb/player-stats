@@ -28,6 +28,9 @@ class PlayerStats : JavaPlugin() {
             sqliteProvider = SQLiteProvider(this)
             sqliteProvider.init()
 
+            repository = StatsRepository(sqliteProvider)
+            repository.init()
+
             buffer = StatsBuffer()
             flushService = StatsFlushService(
                 buffer = buffer,
