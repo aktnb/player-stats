@@ -1,5 +1,6 @@
 package io.github.aktnb.playerStats.command
 
+import io.github.aktnb.playerStats.gui.StatsGuiFactory
 import io.github.aktnb.playerStats.repository.StatsRepository
 import io.github.aktnb.playerStats.scheduler.PluginScheduler
 import net.kyori.adventure.text.Component
@@ -31,29 +32,20 @@ class StatsCommand(
         scheduler.runAsync {
             try {
                 val stats = repository.findByUuid(uuid)
+                val blocksMined = stats?.blocksMined ?: 0L
+                val blocksPlaced = stats?.blocksPlaced ?: 0L
 
                 scheduler.runEntity(player) {
                     if (!player.isOnline) {
                         return@runEntity
                     }
 
-                    if (stats == null) {
-                        player.sendMessage(
-                            Component.text("まだ統計データがありません。", NamedTextColor.YELLOW)
-                        )
-                        return@runEntity
-                    }
-
-                    player.sendMessage(Component.text("===== Your Stats =====", NamedTextColor.GOLD))
-                    player.sendMessage(
-                        Component.text("採掘数: ", NamedTextColor.GRAY)
-                            .append(Component.text(stats.blocksMined.toString(), NamedTextColor.WHITE))
+                    val inventory = StatsGuiFactory.build(
+                        targetName = player.name,
+                        blocksMined = blocksMined,
+                        blocksPlaced = blocksPlaced,
                     )
-                    player.sendMessage(
-                        Component.text("設置数: ", NamedTextColor.GRAY)
-                            .append(Component.text(stats.blocksPlaced.toString(), NamedTextColor.WHITE))
-                    )
-                    player.sendMessage(Component.text("======================", NamedTextColor.GOLD))
+                    player.openInventory(inventory)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
