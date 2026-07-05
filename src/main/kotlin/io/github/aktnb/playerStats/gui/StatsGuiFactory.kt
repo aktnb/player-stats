@@ -20,8 +20,8 @@ import kotlin.math.max
  */
 object StatsGuiFactory {
 
-    internal const val PICKAXE_SLOT = 3
-    internal const val GRASS_SLOT = 5
+    internal const val PICKAXE_SLOT = 21
+    internal const val GRASS_SLOT = 23
 
     internal const val ITEMS_PER_PAGE = 45
     internal const val PREV_PAGE_SLOT = 45
