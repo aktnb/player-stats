@@ -2,8 +2,8 @@ package io.github.aktnb.playerStats.listener
 
 import io.github.aktnb.playerStats.gui.StatsGuiFactory
 import io.github.aktnb.playerStats.gui.StatsGuiHolder
-import io.github.aktnb.playerStats.repository.StatsRepository
 import io.github.aktnb.playerStats.scheduler.PluginScheduler
+import io.github.aktnb.playerStats.stats.VanillaStatsReader
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
@@ -20,11 +20,11 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * 別プレイヤーを右クリックすると、その相手のステータスを閲覧する専用GUIを開くリスナー。
  *
- * DBアクセスは [StatsCommand] と同じく `runAsync` → `runEntity` の二段構えで行い、
- * GUI内での一切の操作(クリック・ドラッグ)はキャンセルして閲覧専用にする。
+ * 統計の読み取りは対象プレイヤー(target)自身が所有するエンティティスレッドで行う必要がある
+ * (Folia対応)ため、`runEntity(target)` で読み取ってから `runEntity(interactor)` へホップして
+ * GUIを開く二段構えにしている。GUI内での一切の操作(クリック・ドラッグ)はキャンセルして閲覧専用にする。
  */
 class StatsGuiListener(
-    private val repository: StatsRepository,
     private val scheduler: PluginScheduler,
 ) : Listener {
 
@@ -44,17 +44,17 @@ class StatsGuiListener(
         // クールダウン判定より前に必ずキャンセルする。
         event.isCancelled = true
 
-        // 連打によるDB問い合わせ・GUI再オープンを抑制
+        // 連打によるGUI再オープンを抑制
         if (isOnCooldown(interactor.uniqueId)) return
 
-        val targetUuid = target.uniqueId
-        val targetName = target.name
+        scheduler.runEntity(target) {
+            if (!target.isOnline) {
+                return@runEntity
+            }
 
-        scheduler.runAsync {
             try {
-                val stats = repository.findByUuid(targetUuid)
-                val blocksMined = stats?.blocksMined ?: 0L
-                val blocksPlaced = stats?.blocksPlaced ?: 0L
+                val stats = VanillaStatsReader.read(target)
+                val targetName = target.name
 
                 scheduler.runEntity(interactor) {
                     if (!interactor.isOnline) {
@@ -63,8 +63,8 @@ class StatsGuiListener(
 
                     val inventory = StatsGuiFactory.build(
                         targetName = targetName,
-                        blocksMined = blocksMined,
-                        blocksPlaced = blocksPlaced,
+                        blocksMined = stats.blocksMined,
+                        blocksPlaced = stats.blocksPlaced,
                     )
                     interactor.openInventory(inventory)
                 }

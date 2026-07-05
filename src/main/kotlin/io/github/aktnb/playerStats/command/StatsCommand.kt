@@ -1,8 +1,8 @@
 package io.github.aktnb.playerStats.command
 
 import io.github.aktnb.playerStats.gui.StatsGuiFactory
-import io.github.aktnb.playerStats.repository.StatsRepository
 import io.github.aktnb.playerStats.scheduler.PluginScheduler
+import io.github.aktnb.playerStats.stats.VanillaStatsReader
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.command.Command
@@ -11,7 +11,6 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 class StatsCommand(
-    private val repository: StatsRepository,
     private val scheduler: PluginScheduler
 ) : CommandExecutor {
 
@@ -27,36 +26,29 @@ class StatsCommand(
         }
 
         val player = sender
-        val uuid = player.uniqueId
 
-        scheduler.runAsync {
+        scheduler.runEntity(player) {
+            if (!player.isOnline) {
+                return@runEntity
+            }
+
             try {
-                val stats = repository.findByUuid(uuid)
-                val blocksMined = stats?.blocksMined ?: 0L
-                val blocksPlaced = stats?.blocksPlaced ?: 0L
+                val stats = VanillaStatsReader.read(player)
 
-                scheduler.runEntity(player) {
-                    if (!player.isOnline) {
-                        return@runEntity
-                    }
-
-                    val inventory = StatsGuiFactory.build(
-                        targetName = player.name,
-                        blocksMined = blocksMined,
-                        blocksPlaced = blocksPlaced,
-                    )
-                    player.openInventory(inventory)
-                }
+                val inventory = StatsGuiFactory.build(
+                    targetName = player.name,
+                    blocksMined = stats.blocksMined,
+                    blocksPlaced = stats.blocksPlaced,
+                )
+                player.openInventory(inventory)
             } catch (e: Exception) {
+                // Defensive fallback: VanillaStatsReader only throws on truly unexpected
+                // errors (its own IllegalArgumentException cases are already handled),
+                // and openInventory/Adventure calls could theoretically fail too.
                 e.printStackTrace()
-
-                scheduler.runEntity(player) {
-                    if (player.isOnline) {
-                        player.sendMessage(
-                            Component.text("統計データの取得に失敗しました。", NamedTextColor.RED)
-                        )
-                    }
-                }
+                player.sendMessage(
+                    Component.text("統計データの取得に失敗しました。", NamedTextColor.RED)
+                )
             }
         }
 
