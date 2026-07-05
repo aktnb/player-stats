@@ -20,6 +20,8 @@ import kotlin.math.max
  */
 object StatsGuiFactory {
 
+    private val PLAYER_NAME_TITLE_COLOR = NamedTextColor.DARK_AQUA
+
     internal const val PICKAXE_SLOT = 21
     internal const val GRASS_SLOT = 23
 
@@ -38,7 +40,7 @@ object StatsGuiFactory {
 
     fun build(targetName: String, blocksMined: Long, blocksPlaced: Long): Inventory {
         val holder = StatsSummaryGuiHolder(targetName)
-        val title = Component.text("$targetName のステータス", NamedTextColor.GOLD)
+        val title = createTitle(targetName, " のステータス")
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
@@ -76,10 +78,7 @@ object StatsGuiFactory {
         val clampedPage = page.coerceIn(0, totalPages - 1)
 
         val holder = StatsDetailGuiHolder(targetName, type, breakdown, clampedPage, sort)
-        val title = Component.text(
-            "$targetName の${type.titleLabel} (${clampedPage + 1}/$totalPages ${sort.label})",
-            NamedTextColor.GOLD,
-        )
+        val title = createTitle(targetName, " の${type.titleLabel} (${clampedPage + 1}/$totalPages ${sort.label})")
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
@@ -129,6 +128,11 @@ object StatsGuiFactory {
             StatDetailSort.NAME_DESC -> breakdown.sortedWith(byName.reversed().thenByDescending { it.count })
         }
     }
+
+    private fun createTitle(targetName: String, suffix: String): Component =
+        Component.empty()
+            .append(Component.text(targetName, PLAYER_NAME_TITLE_COLOR))
+            .append(Component.text(suffix))
 
     private fun createBreakdownItem(material: Material, count: Long, loreLabel: String): ItemStack {
         val item = ItemStack(material)
