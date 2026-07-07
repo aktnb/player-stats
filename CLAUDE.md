@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`player-stats` is a Paper/Folia (Bukkit-based) Minecraft server plugin written in Kotlin. It tracks per-player block-mining/placing counts and exposes them via an inventory GUI, opened either with the `/stats` command (your own stats) or by right-clicking another online player (their stats). Both read Minecraft's own standard statistics (`Player.getStatistic`) on demand — the plugin itself holds no persistence layer.
+`player-stats` is a Paper/Folia (Bukkit-based) Minecraft server plugin written in Kotlin. It tracks per-player block-mining/placing counts and mob-kill counts and exposes them via an inventory GUI, opened either with the `/stats` command (your own stats) or by right-clicking another online player (their stats). Both read Minecraft's own standard statistics (`Player.getStatistic`) on demand — the plugin itself holds no persistence layer.
 
 ## Build & Development Commands
 
@@ -49,6 +49,8 @@ Now that there is no database I/O to offload, the scheduler's role is purely to 
 - **Possible overcounting for "use existing block" interactions (unverified)**: Vanilla only awards `Stats.ITEM_USED` for a block item on a successful *placement* (via `BlockItem.useOn`), not on other interactions — so using a held block item on an existing block of a different kind (e.g. feeding a composter, charging a respawn anchor with glowstone) is not expected to increment `USE_ITEM` for that item. This has not been empirically confirmed against a live server; if `/stats` placed-counts look inflated relative to actual placements, this is the first place to check.
 - **採掘内訳とサマリー合計の不一致**: ピッケルクリックで開くブロック別採掘内訳は、アイコン化できるブロック(`isItem`なMaterial)のみを対象とするため、水・溶岩など非アイテム化ブロックの採掘数を含まない。したがって内訳の合計値はサマリー画面の採掘数合計(`blocksMined`、全ブロック対象)と厳密には一致しない場合がある。既存の「seed系ブロック未カウント」と同種の許容トレードオフ。
 - **設置内訳はアイテム基準**: 草ブロッククリックで開く設置内訳は`Statistic.USE_ITEM`を`itemizableBlockMaterials`(アイテム側Material)に対して集計するため、種→作物のように設置後のブロックが使用アイテムと異なる場合、その設置は内訳に反映されない(既存の「seed系ブロック未カウント」と同種の許容トレードオフ)。なお、こちらは採掘内訳と異なり、内訳の合計値はサマリー画面の設置数合計(`blocksPlaced`)と厳密に一致する(サマリーも同じ`itemizableBlockMaterials`を対象にしているため)。
+- **キル数は Mob 実装エンティティのみ対象**: 鉄の剣クリックで開くキル内訳、およびサマリーのキル数合計(`mobKills`)は、`Statistic.KILL_ENTITY`を「`org.bukkit.entity.Mob`を実装する`EntityType`」に限定して集計する。これにより PLAYER(PvP キル)は API 挙動に依存せず確実に除外されるが、`Mob`を実装しないエンティティ(ARMOR_STAND や一部の非Mob生物など)のキルもカウントされない。`mobKills`とキル内訳は同じ`mobEntityTypes`を対象とするため、内訳の合計値はサマリーの`mobKills`と厳密に一致する。
+- **キル内訳のアイコン解決**: キル内訳の各エンティティアイコンは`EntityIconResolver`が`<TYPE>_SPAWN_EGG`→個別フォールバック(GIANT→ZOMBIE_HEAD、ILLUSIONER→BOW)→既定`IRON_SWORD`の順で解決する確定的関数で、例外は投げない。スポーンエッグが存在しない新規Mobが将来追加された場合は既定の`IRON_SWORD`アイコンで表示される。
 
 ## Manual verification (no automated test suite exists)
 
@@ -57,5 +59,8 @@ Since there is no test suite, verify changes to the stats-reading logic by hand 
 1. Run `/stats` as a fresh player → expect the GUI to show `0` on both the pickaxe (mined) and grass block (placed) items.
 2. Mine and place a handful of different block types → run `/stats` again and cross-check the counts against the vanilla in-game statistics screen (pause menu → Statistics), which reads the same underlying per-player data and serves as an independent oracle.
 3. Right-click another online player → confirm their GUI (not your own) opens with their counts, that the GUI is fully view-only (clicks/drags do nothing), and that rapid repeated right-clicks are throttled by the cooldown rather than reopening/re-reading every time.
-4. Restart the server (stop/start, not `/reload`) → confirm the counts are unchanged and that no plugin-owned data file (e.g. `stats.db`) is created under `plugins/player-stats/`.
-5. If testing on Folia, repeat the mine/place/`/stats` and right-click-another-player sequences to confirm the `PluginScheduler.runEntity` hop(s) in `StatsCommand` and `StatsGuiListener` complete without thread-ownership exceptions.
+4. Kill several kinds of both hostile mobs (e.g. zombies, skeletons) and non-hostile mobs (e.g. villagers, iron golems), then open `/stats` and click the iron sword → confirm the kill-breakdown screen shows a per-entity-type breakdown whose total matches the summary's kill count (`mobKills`). Both are summed over the same `mobEntityTypes`, so they must agree exactly.
+5. Kill another player (PvP) → confirm `mobKills` does **not** increase. The code filters `Statistic.KILL_ENTITY` by the `Mob` interface (`PLAYER` does not implement it), so PvP kills are expected to be excluded; still verify this against a live server, since this depends on vanilla's actual `Statistic.KILL_ENTITY` behavior for player kills.
+6. Kill a `GIANT` and an `ILLUSIONER` (both lack a spawn egg; spawn them via `/summon` since they are otherwise hard to obtain) → confirm the kill-breakdown icons fall back correctly (`GIANT` → zombie head, `ILLUSIONER` → bow) as resolved by `EntityIconResolver`, rather than rendering a missing/default icon.
+7. Restart the server (stop/start, not `/reload`) → confirm the counts are unchanged and that no plugin-owned data file (e.g. `stats.db`) is created under `plugins/player-stats/`.
+8. If testing on Folia, repeat the mine/place/`/stats`, right-click-another-player, and kill-breakdown (iron sword) sequences to confirm the `PluginScheduler.runEntity` hop(s) in `StatsCommand` and `StatsGuiListener` — including the two-stage hop that opens each detail/breakdown GUI (read on the target's thread, open on the viewer's thread) — complete without thread-ownership exceptions.

@@ -1,5 +1,6 @@
 package io.github.aktnb.playerStats.gui
 
+import io.github.aktnb.playerStats.stats.EntityStatCount
 import io.github.aktnb.playerStats.stats.MaterialStatCount
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -14,16 +15,17 @@ import kotlin.math.max
 /**
  * 別プレイヤーのステータスを閲覧するための固定GUI(サイズ54)を組み立てる。
  *
- * サマリー画面ではピッケル(採掘数)・草ブロック(設置数)の2アイテムのみを配置し、残りのスロットは
- * 何も置かない閲覧専用インベントリを返す。ピッケル/草ブロッククリックで開くブロック別内訳画面
- * (採掘/設置・ページング付き)も本オブジェクトが組み立てる。
+ * サマリー画面ではピッケル(採掘数)・草ブロック(設置数)・鉄の剣(キル数)の3アイテムを対称配置し、
+ * 残りのスロットは何も置かない閲覧専用インベントリを返す。各アイテムのクリックで開く内訳画面
+ * (採掘/設置/キル・ページング付き)も本オブジェクトが組み立てる。
  */
 object StatsGuiFactory {
 
     private val PLAYER_NAME_TITLE_COLOR = NamedTextColor.DARK_AQUA
 
-    internal const val PICKAXE_SLOT = 21
-    internal const val GRASS_SLOT = 23
+    internal const val PICKAXE_SLOT = 20
+    internal const val GRASS_SLOT = 22
+    internal const val SWORD_SLOT = 24
 
     internal const val ITEMS_PER_PAGE = 45
     internal const val PREV_PAGE_SLOT = 45
@@ -38,7 +40,7 @@ object StatsGuiFactory {
     /** 内訳エントリ数から総ページ数(最低1)を求める。空でも1ページ分は確保する。 */
     internal fun totalPages(size: Int): Int = max(1, ceil(size / ITEMS_PER_PAGE.toDouble()).toInt())
 
-    fun build(targetName: String, blocksMined: Long, blocksPlaced: Long): Inventory {
+    fun build(targetName: String, blocksMined: Long, blocksPlaced: Long, mobKills: Long): Inventory {
         val holder = StatsSummaryGuiHolder(targetName)
         val title = createTitle(targetName, " のステータス")
         val inventory = Bukkit.createInventory(holder, 54, title)
@@ -62,10 +64,20 @@ object StatsGuiFactory {
                 value = blocksPlaced,
             )
         )
+        inventory.setItem(
+            SWORD_SLOT,
+            createItem(
+                material = Material.IRON_SWORD,
+                displayName = Component.text("キル数", NamedTextColor.GOLD),
+                loreLabel = "キル数: ",
+                value = mobKills,
+            )
+        )
 
         return inventory
     }
 
+    /** ブロック別内訳(採掘/設置)画面を組み立てる。 */
     fun buildDetail(
         targetName: String,
         type: StatDetailType,
@@ -73,22 +85,63 @@ object StatsGuiFactory {
         page: Int,
         sort: StatDetailSort = StatDetailSort.COUNT_DESC,
     ): Inventory {
-        val sortedBreakdown = sortBreakdown(breakdown, sort)
-        val totalPages = totalPages(breakdown.size)
-        val clampedPage = page.coerceIn(0, totalPages - 1)
+        val sortedBreakdown = sortMaterialBreakdown(breakdown, sort)
+        val holder = MaterialDetailGuiHolder(targetName, type, breakdown, clampPage(page, breakdown.size), sort)
+        return renderDetail(holder) { globalIndex ->
+            val entry = sortedBreakdown[globalIndex]
+            createBreakdownItem(entry.material, entry.count, type.loreLabel)
+        }
+    }
 
-        val holder = StatsDetailGuiHolder(targetName, type, breakdown, clampedPage, sort)
-        val title = createTitle(targetName, " の${type.titleLabel} (${clampedPage + 1}/$totalPages ${sort.label})")
+    /**
+     * エンティティ別内訳(キル)画面を組み立てる。
+     *
+     * [List] の型引数はJVMのシグネチャ上は消去されて Material 版と衝突するため、[JvmName] でJVM側の
+     * メソッド名を分離する。Kotlin呼び出し側では引数の静的型でオーバーロードが解決されるため通常どおり
+     * `buildDetail(...)` で呼べる。
+     */
+    @JvmName("buildEntityDetail")
+    fun buildDetail(
+        targetName: String,
+        type: StatDetailType,
+        breakdown: List<EntityStatCount>,
+        page: Int,
+        sort: StatDetailSort = StatDetailSort.COUNT_DESC,
+    ): Inventory {
+        val sortedBreakdown = sortEntityBreakdown(breakdown, sort)
+        val holder = EntityDetailGuiHolder(targetName, type, breakdown, clampPage(page, breakdown.size), sort)
+        return renderDetail(holder) { globalIndex ->
+            val entry = sortedBreakdown[globalIndex]
+            createBreakdownItem(EntityIconResolver.iconFor(entry.entityType), entry.count, type.loreLabel)
+        }
+    }
+
+    /** 内訳エントリ数から表示ページを0..(総ページ数-1)にクランプする。 */
+    private fun clampPage(page: Int, size: Int): Int = page.coerceIn(0, totalPages(size) - 1)
+
+    /**
+     * 内訳画面の共通描画(ページング・ナビ・ソートボタン・空表示)を担う。要素型に依存しない部分を集約し、
+     * アイテム生成のみ [itemFactory](対象ページ内グローバルインデックス→ItemStack)で差し込む。
+     * ページ範囲・ソートは既に反映済みの [holder] を用いるため、呼び出し側でクランプ済みのholderを渡すこと。
+     */
+    private fun renderDetail(holder: StatsDetailGuiHolder, itemFactory: (Int) -> ItemStack): Inventory {
+        val type = holder.type
+        val sort = holder.sort
+        val clampedPage = holder.page
+        val breakdownSize = holder.breakdownSize
+        val totalPages = totalPages(breakdownSize)
+
+        val title = createTitle(holder.targetName, " の${type.titleLabel} (${clampedPage + 1}/$totalPages ${sort.label})")
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
-        if (breakdown.isEmpty()) {
+        if (breakdownSize == 0) {
             inventory.setItem(PLACEHOLDER_SLOT, createPlaceholderItem(type.emptyLabel))
         } else {
             val fromIndex = clampedPage * ITEMS_PER_PAGE
-            val toIndex = minOf(fromIndex + ITEMS_PER_PAGE, breakdown.size)
-            for ((slot, entry) in sortedBreakdown.subList(fromIndex, toIndex).withIndex()) {
-                inventory.setItem(slot, createBreakdownItem(entry.material, entry.count, type.loreLabel))
+            val toIndex = minOf(fromIndex + ITEMS_PER_PAGE, breakdownSize)
+            for (slot in 0 until (toIndex - fromIndex)) {
+                inventory.setItem(slot, itemFactory(fromIndex + slot))
             }
         }
 
@@ -119,11 +172,21 @@ object StatsGuiFactory {
         return inventory
     }
 
-    private fun sortBreakdown(breakdown: List<MaterialStatCount>, sort: StatDetailSort): List<MaterialStatCount> {
+    private fun sortMaterialBreakdown(breakdown: List<MaterialStatCount>, sort: StatDetailSort): List<MaterialStatCount> {
         val byName = compareBy<MaterialStatCount> { it.material.name }
         return when (sort) {
             StatDetailSort.COUNT_ASC -> breakdown.sortedWith(compareBy<MaterialStatCount> { it.count }.then(byName))
             StatDetailSort.COUNT_DESC -> breakdown.sortedWith(compareByDescending<MaterialStatCount> { it.count }.then(byName))
+            StatDetailSort.NAME_ASC -> breakdown.sortedWith(byName.thenByDescending { it.count })
+            StatDetailSort.NAME_DESC -> breakdown.sortedWith(byName.reversed().thenByDescending { it.count })
+        }
+    }
+
+    private fun sortEntityBreakdown(breakdown: List<EntityStatCount>, sort: StatDetailSort): List<EntityStatCount> {
+        val byName = compareBy<EntityStatCount> { it.entityType.name }
+        return when (sort) {
+            StatDetailSort.COUNT_ASC -> breakdown.sortedWith(compareBy<EntityStatCount> { it.count }.then(byName))
+            StatDetailSort.COUNT_DESC -> breakdown.sortedWith(compareByDescending<EntityStatCount> { it.count }.then(byName))
             StatDetailSort.NAME_ASC -> breakdown.sortedWith(byName.thenByDescending { it.count })
             StatDetailSort.NAME_DESC -> breakdown.sortedWith(byName.reversed().thenByDescending { it.count })
         }
