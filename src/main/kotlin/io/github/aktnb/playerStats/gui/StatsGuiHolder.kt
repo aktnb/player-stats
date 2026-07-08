@@ -51,7 +51,7 @@ class StatsSummaryGuiHolder(targetName: String) : StatsGuiHolder(targetName)
  * 内訳(採掘/設置/キル)を表示するGUIのholder。[type] で種別を区別する。
  *
  * 内訳データはGUIを開いた時点のスナップショットをページ送りの間キャッシュとして使い回す
- * (ページ送りのたびにStatistic再読み取り・Foliaスレッドホップを発生させないため)。
+ * (ページ送りのたびにStatisticを再読み取りしないため)。
  * そのため詳細GUIを開いている間に対象プレイヤーが採掘/設置/キルを続けると内容が古くなりうるが、
  * 表示時間の短いGUIなので許容する。「戻る」ボタンではサマリーを都度再取得する。
  *

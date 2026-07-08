@@ -8,7 +8,6 @@ import io.github.aktnb.playerStats.gui.StatsDetailGuiHolder
 import io.github.aktnb.playerStats.gui.StatsGuiFactory
 import io.github.aktnb.playerStats.gui.StatsGuiHolder
 import io.github.aktnb.playerStats.gui.StatsSummaryGuiHolder
-import io.github.aktnb.playerStats.scheduler.PluginScheduler
 import io.github.aktnb.playerStats.stats.VanillaStatsReader
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -22,31 +21,31 @@ import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.inventory.EquipmentSlot
+import org.bukkit.plugin.Plugin
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 別プレイヤーを右クリックすると、その相手のステータスを閲覧する専用GUIを開くリスナー。
  *
- * 統計の読み取りは対象プレイヤー(target)自身が所有するエンティティスレッドで行う必要がある
- * (Folia対応)ため、`runEntity(target)` で読み取ってから `runEntity(interactor)` へホップして
- * GUIを開く二段構えにしている。GUI内での一切の操作(クリック・ドラッグ)はキャンセルして閲覧専用にする。
- * サマリー画面のピッケル/草ブロックのクリックでそれぞれ採掘/設置のブロック別内訳画面へ、
- * 内訳画面の各ボタンでページ送り・サマリー復帰を行う。
+ * 統計の読み取りとGUIオープンは、クリック処理中のインベントリ操作と干渉しないよう
+ * `Bukkit.getScheduler().runTask` で次tickにスケジュールしてから行う。GUI内での一切の操作
+ * (クリック・ドラッグ)はキャンセルして閲覧専用にする。サマリー画面のピッケル/草ブロックの
+ * クリックでそれぞれ採掘/設置のブロック別内訳画面へ、内訳画面の各ボタンでページ送り・
+ * サマリー復帰を行う。
  */
 class StatsGuiListener(
-    private val scheduler: PluginScheduler,
+    private val plugin: Plugin,
 ) : Listener {
 
     private val cooldowns = ConcurrentHashMap<UUID, Long>()
 
     /**
-     * スレッドホップを伴う遷移(サマリー再取得・内訳取得)の処理中フラグ(開始時刻を保持)。多重発火を防ぐ。
-     *
-     * Folia環境では `runEntity(target)` にスケジュールしたタスクが、target退出時に実行されず破棄される
-     * ことがあり、その場合 [markTransition] で登録したエントリの明示的除去が走らない。恒久ロックを避けるため
-     * `cooldowns` と同様のタイムスタンプ方式とし、[TRANSITION_TIMEOUT_MILLIS] 経過したエントリは期限切れ
-     * として無視する(明示除去が走らなくても一定時間後に自動復帰する)。
+     * 次tickへのスケジュールを伴う遷移(サマリー再取得・内訳取得)の処理中フラグ(開始時刻を保持)。
+     * クリックからスケジュールされたタスクが実行されるまでの間に同じ操作が連打された場合の
+     * 多重発火を防ぐ。プラグイン無効化等でスケジュール済みタスクが実行されず [clearTransition] が
+     * 明示的に呼ばれなかった場合に備え、`cooldowns` と同様のタイムスタンプ方式とし、
+     * [TRANSITION_TIMEOUT_MILLIS] 経過したエントリは期限切れとして無視する(自動復帰する)。
      */
     private val pendingTransitions = ConcurrentHashMap<UUID, Long>()
 
@@ -100,21 +99,21 @@ class StatsGuiListener(
                     StatsGuiFactory.BACK_SLOT -> openSummaryGui(holder.targetName, viewer, expectedHolder = holder)
                     StatsGuiFactory.PREV_PAGE_SLOT -> {
                         if (holder.page > 0) {
-                            scheduler.runEntity(viewer) {
+                            Bukkit.getScheduler().runTask(plugin, Runnable {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
                                     viewer.openInventory(rebuildDetail(holder, holder.page - 1, holder.sort))
                                 }
-                            }
+                            })
                         }
                     }
                     StatsGuiFactory.NEXT_PAGE_SLOT -> {
                         val maxPage = StatsGuiFactory.totalPages(holder.breakdownSize) - 1
                         if (holder.page < maxPage) {
-                            scheduler.runEntity(viewer) {
+                            Bukkit.getScheduler().runTask(plugin, Runnable {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
                                     viewer.openInventory(rebuildDetail(holder, holder.page + 1, holder.sort))
                                 }
-                            }
+                            })
                         }
                     }
                     StatsGuiFactory.COUNT_ASC_SORT_SLOT -> reopenDetailWithSort(holder, viewer, StatDetailSort.COUNT_ASC)
@@ -145,44 +144,36 @@ class StatsGuiListener(
             return
         }
 
-        scheduler.runEntity(target) {
+        Bukkit.getScheduler().runTask(plugin, Runnable {
             try {
                 if (!target.isOnline) {
-                    clearTransition(viewer.uniqueId)
-                    return@runEntity
+                    return@Runnable
                 }
                 val stats = VanillaStatsReader.read(target)
                 val resolvedName = target.name
 
-                scheduler.runEntity(viewer) {
-                    try {
-                        if (!viewer.isOnline) {
-                            return@runEntity
-                        }
-                        if (expectedHolder != null && viewer.openInventory.topInventory.holder !== expectedHolder) {
-                            return@runEntity
-                        }
-                        val inventory = StatsGuiFactory.build(
-                            targetName = resolvedName,
-                            blocksMined = stats.blocksMined,
-                            blocksPlaced = stats.blocksPlaced,
-                            mobKills = stats.mobKills,
-                        )
-                        viewer.openInventory(inventory)
-                    } finally {
-                        clearTransition(viewer.uniqueId)
-                    }
+                if (!viewer.isOnline) {
+                    return@Runnable
                 }
+                if (expectedHolder != null && viewer.openInventory.topInventory.holder !== expectedHolder) {
+                    return@Runnable
+                }
+                val inventory = StatsGuiFactory.build(
+                    targetName = resolvedName,
+                    blocksMined = stats.blocksMined,
+                    blocksPlaced = stats.blocksPlaced,
+                    mobKills = stats.mobKills,
+                )
+                viewer.openInventory(inventory)
             } catch (e: Exception) {
                 e.printStackTrace()
-                scheduler.runEntity(viewer) {
-                    if (viewer.isOnline) {
-                        viewer.sendMessage(Component.text("統計データの取得に失敗しました。", NamedTextColor.RED))
-                    }
-                    clearTransition(viewer.uniqueId)
+                if (viewer.isOnline) {
+                    viewer.sendMessage(Component.text("統計データの取得に失敗しました。", NamedTextColor.RED))
                 }
+            } finally {
+                clearTransition(viewer.uniqueId)
             }
-        }
+        })
     }
 
     private fun openDetailGui(targetName: String, viewer: Player, type: StatDetailType, page: Int, expectedHolder: StatsGuiHolder?) {
@@ -197,16 +188,14 @@ class StatsGuiListener(
             return
         }
 
-        scheduler.runEntity(target) {
+        Bukkit.getScheduler().runTask(plugin, Runnable {
             try {
                 if (!target.isOnline) {
-                    clearTransition(viewer.uniqueId)
-                    return@runEntity
+                    return@Runnable
                 }
                 val resolvedName = target.name
-                // 内訳の要素型(ブロック/エンティティ)は type ごとに異なるため、対象スレッドで読み取った
-                // breakdown を型付きクロージャに閉じ込め、viewerスレッド側では型に応じた buildDetail
-                // オーバーロードが静的に解決されるようにする。
+                // 内訳の要素型(ブロック/エンティティ)は type ごとに異なるため、buildDetail
+                // オーバーロードが静的に解決されるよう、breakdown を型付きクロージャに閉じ込める。
                 // 各分岐のラムダを `({ ... })` と括弧で包むのは、括弧を外すと直前の
                 // `val breakdown = VanillaStatsReader.readXxxBreakdown(target)` の呼び出しに対する
                 // trailing lambda として `readXxxBreakdown(target) { ... }` に誤パースされてしまうため
@@ -227,29 +216,22 @@ class StatsGuiListener(
                     }
                 }
 
-                scheduler.runEntity(viewer) {
-                    try {
-                        if (!viewer.isOnline) {
-                            return@runEntity
-                        }
-                        if (expectedHolder != null && viewer.openInventory.topInventory.holder !== expectedHolder) {
-                            return@runEntity
-                        }
-                        viewer.openInventory(inventoryFactory())
-                    } finally {
-                        clearTransition(viewer.uniqueId)
-                    }
+                if (!viewer.isOnline) {
+                    return@Runnable
                 }
+                if (expectedHolder != null && viewer.openInventory.topInventory.holder !== expectedHolder) {
+                    return@Runnable
+                }
+                viewer.openInventory(inventoryFactory())
             } catch (e: Exception) {
                 e.printStackTrace()
-                scheduler.runEntity(viewer) {
-                    if (viewer.isOnline) {
-                        viewer.sendMessage(Component.text("統計データの取得に失敗しました。", NamedTextColor.RED))
-                    }
-                    clearTransition(viewer.uniqueId)
+                if (viewer.isOnline) {
+                    viewer.sendMessage(Component.text("統計データの取得に失敗しました。", NamedTextColor.RED))
                 }
+            } finally {
+                clearTransition(viewer.uniqueId)
             }
-        }
+        })
     }
 
     private fun reopenDetailWithSort(holder: StatsDetailGuiHolder, viewer: Player, sort: StatDetailSort) {
@@ -257,11 +239,11 @@ class StatsGuiListener(
             return
         }
 
-        scheduler.runEntity(viewer) {
+        Bukkit.getScheduler().runTask(plugin, Runnable {
             if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
                 viewer.openInventory(rebuildDetail(holder, page = 0, sort = sort))
             }
-        }
+        })
     }
 
     /**
@@ -289,7 +271,7 @@ class StatsGuiListener(
     /**
      * 遷移処理の開始を登録する。有効期限([TRANSITION_TIMEOUT_MILLIS])内の既存エントリがあれば
      * 処理中とみなし `false`(スキップ)を返す。期限切れ・未登録なら登録して `true` を返す。
-     * Folia環境で `clearTransition` が走らなかった場合でも、期限切れ判定により自動復帰する。
+     * 何らかの理由で `clearTransition` が走らなかった場合でも、期限切れ判定により自動復帰する。
      */
     private fun markTransition(uuid: UUID): Boolean {
         val now = System.currentTimeMillis()

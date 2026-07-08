@@ -2,21 +2,15 @@ package io.github.aktnb.playerStats
 
 import io.github.aktnb.playerStats.command.StatsCommand
 import io.github.aktnb.playerStats.listener.StatsGuiListener
-import io.github.aktnb.playerStats.scheduler.PluginScheduler
-import io.github.aktnb.playerStats.scheduler.SchedulerFactory
 import org.bukkit.plugin.java.JavaPlugin
 
 class PlayerStats : JavaPlugin() {
 
-    private lateinit var scheduler: PluginScheduler
-
     override fun onEnable() {
         logger.info("Enabling PlayerStats")
         try {
-            scheduler = SchedulerFactory.create(this)
-
             server.pluginManager.registerEvents(
-                StatsGuiListener(scheduler = scheduler),
+                StatsGuiListener(plugin = this),
                 this
             )
 
@@ -25,7 +19,7 @@ class PlayerStats : JavaPlugin() {
                 logger.warning("Command 'stats' is not defined in plugin.yml")
             } else {
                 statsCommand.setExecutor(
-                    StatsCommand(scheduler = scheduler)
+                    StatsCommand(plugin = this)
                 )
             }
 
