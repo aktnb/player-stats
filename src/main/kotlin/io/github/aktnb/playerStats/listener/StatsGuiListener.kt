@@ -1,5 +1,7 @@
 package io.github.aktnb.playerStats.listener
 
+import io.github.aktnb.playerStats.gui.EntityDetailGuiHolder
+import io.github.aktnb.playerStats.gui.MaterialDetailGuiHolder
 import io.github.aktnb.playerStats.gui.StatDetailType
 import io.github.aktnb.playerStats.gui.StatDetailSort
 import io.github.aktnb.playerStats.gui.StatsDetailGuiHolder
@@ -12,6 +14,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
+import org.bukkit.inventory.Inventory
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.inventory.InventoryClickEvent
@@ -88,6 +91,8 @@ class StatsGuiListener(
                         openDetailGui(holder.targetName, viewer, StatDetailType.MINING, page = 0, expectedHolder = holder)
                     StatsGuiFactory.GRASS_SLOT ->
                         openDetailGui(holder.targetName, viewer, StatDetailType.PLACEMENT, page = 0, expectedHolder = holder)
+                    StatsGuiFactory.SWORD_SLOT ->
+                        openDetailGui(holder.targetName, viewer, StatDetailType.MOB_KILL, page = 0, expectedHolder = holder)
                 }
             }
             is StatsDetailGuiHolder -> {
@@ -97,33 +102,17 @@ class StatsGuiListener(
                         if (holder.page > 0) {
                             scheduler.runEntity(viewer) {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
-                                    viewer.openInventory(
-                                        StatsGuiFactory.buildDetail(
-                                            holder.targetName,
-                                            holder.type,
-                                            holder.breakdown,
-                                            holder.page - 1,
-                                            holder.sort,
-                                        )
-                                    )
+                                    viewer.openInventory(rebuildDetail(holder, holder.page - 1, holder.sort))
                                 }
                             }
                         }
                     }
                     StatsGuiFactory.NEXT_PAGE_SLOT -> {
-                        val maxPage = StatsGuiFactory.totalPages(holder.breakdown.size) - 1
+                        val maxPage = StatsGuiFactory.totalPages(holder.breakdownSize) - 1
                         if (holder.page < maxPage) {
                             scheduler.runEntity(viewer) {
                                 if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
-                                    viewer.openInventory(
-                                        StatsGuiFactory.buildDetail(
-                                            holder.targetName,
-                                            holder.type,
-                                            holder.breakdown,
-                                            holder.page + 1,
-                                            holder.sort,
-                                        )
-                                    )
+                                    viewer.openInventory(rebuildDetail(holder, holder.page + 1, holder.sort))
                                 }
                             }
                         }
@@ -177,6 +166,7 @@ class StatsGuiListener(
                             targetName = resolvedName,
                             blocksMined = stats.blocksMined,
                             blocksPlaced = stats.blocksPlaced,
+                            mobKills = stats.mobKills,
                         )
                         viewer.openInventory(inventory)
                     } finally {
@@ -213,11 +203,29 @@ class StatsGuiListener(
                     clearTransition(viewer.uniqueId)
                     return@runEntity
                 }
-                val breakdown = when (type) {
-                    StatDetailType.MINING -> VanillaStatsReader.readMiningBreakdown(target)
-                    StatDetailType.PLACEMENT -> VanillaStatsReader.readPlacementBreakdown(target)
-                }
                 val resolvedName = target.name
+                // 内訳の要素型(ブロック/エンティティ)は type ごとに異なるため、対象スレッドで読み取った
+                // breakdown を型付きクロージャに閉じ込め、viewerスレッド側では型に応じた buildDetail
+                // オーバーロードが静的に解決されるようにする。
+                // 各分岐のラムダを `({ ... })` と括弧で包むのは、括弧を外すと直前の
+                // `val breakdown = VanillaStatsReader.readXxxBreakdown(target)` の呼び出しに対する
+                // trailing lambda として `readXxxBreakdown(target) { ... }` に誤パースされてしまうため
+                // (breakdown が Unit 扱いになり、ラムダ内の breakdown 参照も解決できなくなる)。
+                // 括弧で独立した式に確定させることでこれを防いでいる。
+                val inventoryFactory: () -> Inventory = when (type) {
+                    StatDetailType.MINING -> {
+                        val breakdown = VanillaStatsReader.readMiningBreakdown(target)
+                        ({ StatsGuiFactory.buildDetail(resolvedName, type, breakdown, page) })
+                    }
+                    StatDetailType.PLACEMENT -> {
+                        val breakdown = VanillaStatsReader.readPlacementBreakdown(target)
+                        ({ StatsGuiFactory.buildDetail(resolvedName, type, breakdown, page) })
+                    }
+                    StatDetailType.MOB_KILL -> {
+                        val breakdown = VanillaStatsReader.readMobKillBreakdown(target)
+                        ({ StatsGuiFactory.buildDetail(resolvedName, type, breakdown, page) })
+                    }
+                }
 
                 scheduler.runEntity(viewer) {
                     try {
@@ -227,7 +235,7 @@ class StatsGuiListener(
                         if (expectedHolder != null && viewer.openInventory.topInventory.holder !== expectedHolder) {
                             return@runEntity
                         }
-                        viewer.openInventory(StatsGuiFactory.buildDetail(resolvedName, type, breakdown, page))
+                        viewer.openInventory(inventoryFactory())
                     } finally {
                         clearTransition(viewer.uniqueId)
                     }
@@ -251,18 +259,22 @@ class StatsGuiListener(
 
         scheduler.runEntity(viewer) {
             if (viewer.isOnline && viewer.openInventory.topInventory.holder === holder) {
-                viewer.openInventory(
-                    StatsGuiFactory.buildDetail(
-                        holder.targetName,
-                        holder.type,
-                        holder.breakdown,
-                        page = 0,
-                        sort = sort,
-                    )
-                )
+                viewer.openInventory(rebuildDetail(holder, page = 0, sort = sort))
             }
         }
     }
+
+    /**
+     * キャッシュ済みの内訳スナップショットを用いて詳細GUIを再構築する。内訳の要素型(ブロック/エンティティ)は
+     * holderのサブクラスごとに異なるため、ここで分岐して型に応じた [StatsGuiFactory.buildDetail] を呼ぶ。
+     */
+    private fun rebuildDetail(holder: StatsDetailGuiHolder, page: Int, sort: StatDetailSort): Inventory =
+        when (holder) {
+            is MaterialDetailGuiHolder ->
+                StatsGuiFactory.buildDetail(holder.targetName, holder.type, holder.breakdown, page, sort)
+            is EntityDetailGuiHolder ->
+                StatsGuiFactory.buildDetail(holder.targetName, holder.type, holder.breakdown, page, sort)
+        }
 
     private fun isOnCooldown(uuid: UUID): Boolean {
         val now = System.currentTimeMillis()

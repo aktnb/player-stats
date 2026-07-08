@@ -39,6 +39,7 @@ class StatsCommand(
                     targetName = player.name,
                     blocksMined = stats.blocksMined,
                     blocksPlaced = stats.blocksPlaced,
+                    mobKills = stats.mobKills,
                 )
                 player.openInventory(inventory)
             } catch (e: Exception) {
