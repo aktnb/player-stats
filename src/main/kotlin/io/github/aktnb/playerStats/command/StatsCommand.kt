@@ -1,17 +1,18 @@
 package io.github.aktnb.playerStats.command
 
 import io.github.aktnb.playerStats.gui.StatsGuiFactory
-import io.github.aktnb.playerStats.scheduler.PluginScheduler
 import io.github.aktnb.playerStats.stats.VanillaStatsReader
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
+import org.bukkit.plugin.Plugin
 
 class StatsCommand(
-    private val scheduler: PluginScheduler
+    private val plugin: Plugin
 ) : CommandExecutor {
 
     override fun onCommand(
@@ -27,9 +28,9 @@ class StatsCommand(
 
         val player = sender
 
-        scheduler.runEntity(player) {
+        Bukkit.getScheduler().runTask(plugin, Runnable {
             if (!player.isOnline) {
-                return@runEntity
+                return@Runnable
             }
 
             try {
@@ -51,7 +52,7 @@ class StatsCommand(
                     Component.text("統計データの取得に失敗しました。", NamedTextColor.RED)
                 )
             }
-        }
+        })
 
         return true
     }
