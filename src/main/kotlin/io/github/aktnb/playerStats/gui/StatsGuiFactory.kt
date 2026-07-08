@@ -112,7 +112,14 @@ object StatsGuiFactory {
         val holder = EntityDetailGuiHolder(targetName, type, breakdown, clampPage(page, breakdown.size), sort)
         return renderDetail(holder) { globalIndex ->
             val entry = sortedBreakdown[globalIndex]
-            createBreakdownItem(EntityIconResolver.iconFor(entry.entityType), entry.count, type.loreLabel)
+            createBreakdownItem(
+                material = EntityIconResolver.iconFor(entry.entityType),
+                count = entry.count,
+                loreLabel = type.loreLabel,
+                // アイコンはスポーンエッグのままだが、表示名はエンティティ自体の翻訳キーを使うことで
+                // 「〇〇のスポーンエッグ」ではなくMob名(クライアントの言語設定に応じてローカライズされる)を表示する。
+                displayName = Component.translatable(entry.entityType, NamedTextColor.GOLD),
+            )
         }
     }
 
@@ -197,9 +204,17 @@ object StatsGuiFactory {
             .append(Component.text(targetName, PLAYER_NAME_TITLE_COLOR))
             .append(Component.text(suffix))
 
-    private fun createBreakdownItem(material: Material, count: Long, loreLabel: String): ItemStack {
+    /**
+     * [displayName] を渡した場合はアイテムの表示名を明示的に上書きする(未指定ならMaterial自身の既定名のまま)。
+     * ブロック内訳ではMaterial名がそのままブロック名なので上書き不要だが、エンティティ内訳では
+     * アイコンにスポーンエッグを使う一方、表示名はMob名にしたいためこのオーバーロードを使う。
+     */
+    private fun createBreakdownItem(material: Material, count: Long, loreLabel: String, displayName: Component? = null): ItemStack {
         val item = ItemStack(material)
         item.editMeta { meta ->
+            if (displayName != null) {
+                meta.displayName(displayName.decoration(TextDecoration.ITALIC, false))
+            }
             meta.lore(
                 listOf(
                     Component.text(loreLabel, NamedTextColor.GRAY)
