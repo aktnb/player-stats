@@ -5,19 +5,25 @@ import io.github.aktnb.playerStats.stats.MaterialStatCount
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.InventoryHolder
 
-/** 内訳の種別。表示文言をここに集約する。 */
-enum class StatDetailType(val titleLabel: String, val loreLabel: String, val emptyLabel: String) {
-    MINING("採掘内訳", "採掘数: ", "採掘記録なし"),
-    PLACEMENT("設置内訳", "設置数: ", "設置記録なし"),
-    MOB_KILL("キル内訳", "キル数: ", "キル記録なし"),
+/**
+ * 内訳の種別を表す識別子。表示文言は [io.github.aktnb.playerStats.i18n.Messages] 側で
+ * 閲覧者の言語ごとに解決するため、ここでは種別を区別するためだけのプレーンな識別子に留める。
+ */
+enum class StatDetailType {
+    MINING,
+    PLACEMENT,
+    MOB_KILL,
 }
 
-/** ブロック別内訳の並び順。 */
-enum class StatDetailSort(val label: String) {
-    COUNT_ASC("昇順"),
-    COUNT_DESC("降順"),
-    NAME_ASC("辞書順"),
-    NAME_DESC("辞書逆順"),
+/**
+ * ブロック別内訳の並び順を表す識別子。表示文言は [io.github.aktnb.playerStats.i18n.Messages] 側で
+ * 閲覧者の言語ごとに解決するため、ここでは並び順を区別するためだけのプレーンな識別子に留める。
+ */
+enum class StatDetailSort {
+    COUNT_ASC,
+    COUNT_DESC,
+    NAME_ASC,
+    NAME_DESC,
 }
 
 /**
