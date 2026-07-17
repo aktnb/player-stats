@@ -49,6 +49,7 @@ class StatsCommand(
                     blocksMined = stats.blocksMined,
                     blocksPlaced = stats.blocksPlaced,
                     mobKills = stats.mobKills,
+                    playTimeTicks = stats.playTimeTicks,
                     messages = messages,
                 )
                 player.openInventory(inventory)

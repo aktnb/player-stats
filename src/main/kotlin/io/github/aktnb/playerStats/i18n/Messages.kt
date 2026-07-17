@@ -2,6 +2,8 @@ package io.github.aktnb.playerStats.i18n
 
 import io.github.aktnb.playerStats.gui.StatDetailSort
 import io.github.aktnb.playerStats.gui.StatDetailType
+import io.github.aktnb.playerStats.stats.PlayTime
+import io.github.aktnb.playerStats.stats.PlayTimeUnit
 
 /**
  * GUI表示用の文言一式。[MessageCatalog] が [Language] ごとに1インスタンスだけ静的に保持し、
@@ -34,6 +36,14 @@ data class Messages(
     val sortStateActive: String,
     /** ソートボタンのlore: クリックでそのソートに切り替えられることを示す文言。 */
     val sortStateInactive: String,
+    /** サマリー画面の累計プレイ時間アイテムの表示名、および同アイテムlore見出しの元になるラベル。 */
+    val playTimeLabel: String,
+    /**
+     * 累計プレイ時間の各単位(日/時/分)のラベルを返す。`Map` ではなく網羅的 `when` 実装の関数として
+     * 持たせることで、将来 [PlayTimeUnit] に列挙子を追加した際にコンパイルエラーで気づけるようにしている
+     * ([statLabel] などと同じ設計方針)。
+     */
+    val playTimeUnitLabel: (PlayTimeUnit) -> String,
     /** 「戻る」ボタンの表示名。 */
     val navBack: String,
     /** 「前のページ」ボタンの表示名。 */
@@ -56,6 +66,17 @@ data class Messages(
      */
     fun detailTitleSuffix(type: StatDetailType, currentPage: Int, totalPages: Int, sort: StatDetailSort): String =
         "$detailTitleConnector${detailTitle(type)} ($currentPage/$totalPages ${sortLabel(sort)})"
+
+    /**
+     * 累計プレイ時間を「日 時 分」形式の表示文字列に整形する。表示すべき単位の判断(上位/末尾ゼロ省略・
+     * 全0時の最小単位表示)という言語非依存のロジックは [PlayTime.displayUnits] に委ね、本メソッドは
+     * 各単位への言語依存ラベル付けと連結のみを担う([detailTitleSuffix] と同様に、言語依存部
+     * ([playTimeUnitLabel]) は関数フィールドとして分離し、組み立ては共通ヘルパーに集約している)。
+     *
+     * 例(JA): "45分" / "3時間 20分" / "2日 5時間"。(EN): "45m" / "3h 20m" / "2d 5h"。
+     */
+    fun formatPlayTime(playTime: PlayTime): String =
+        playTime.displayUnits().joinToString(" ") { "${it.value}${playTimeUnitLabel(it.unit)}" }
 }
 
 /**
@@ -100,6 +121,14 @@ object MessageCatalog {
         },
         sortStateActive = "現在の並び順",
         sortStateInactive = "クリックで並び替え",
+        playTimeLabel = "累計プレイ時間",
+        playTimeUnitLabel = { unit ->
+            when (unit) {
+                PlayTimeUnit.DAY -> "日"
+                PlayTimeUnit.HOUR -> "時間"
+                PlayTimeUnit.MINUTE -> "分"
+            }
+        },
         navBack = "戻る",
         navPrevPage = "◀ 前のページ",
         navNextPage = "次のページ ▶",
@@ -141,6 +170,14 @@ object MessageCatalog {
         },
         sortStateActive = "Current sort",
         sortStateInactive = "Click to sort",
+        playTimeLabel = "Playtime",
+        playTimeUnitLabel = { unit ->
+            when (unit) {
+                PlayTimeUnit.DAY -> "d"
+                PlayTimeUnit.HOUR -> "h"
+                PlayTimeUnit.MINUTE -> "m"
+            }
+        },
         navBack = "Back",
         navPrevPage = "◀ Previous Page",
         navNextPage = "Next Page ▶",

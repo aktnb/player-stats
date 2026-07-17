@@ -3,6 +3,7 @@ package io.github.aktnb.playerStats.gui
 import io.github.aktnb.playerStats.i18n.Messages
 import io.github.aktnb.playerStats.stats.EntityStatCount
 import io.github.aktnb.playerStats.stats.MaterialStatCount
+import io.github.aktnb.playerStats.stats.PlayTime
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
@@ -24,9 +25,11 @@ object StatsGuiFactory {
 
     private val PLAYER_NAME_TITLE_COLOR = NamedTextColor.DARK_AQUA
 
-    internal const val PICKAXE_SLOT = 20
-    internal const val GRASS_SLOT = 22
-    internal const val SWORD_SLOT = 24
+    // サマリー画面(row2 = slot18-26)に4アイテムを対称配置する(19/21/23/25)。
+    internal const val PICKAXE_SLOT = 19
+    internal const val GRASS_SLOT = 21
+    internal const val SWORD_SLOT = 23
+    internal const val CLOCK_SLOT = 25
 
     internal const val ITEMS_PER_PAGE = 45
     internal const val PREV_PAGE_SLOT = 45
@@ -36,12 +39,19 @@ object StatsGuiFactory {
     internal const val NAME_ASC_SORT_SLOT = 51
     internal const val NAME_DESC_SORT_SLOT = 52
     internal const val NEXT_PAGE_SLOT = 53
+
+    /**
+     * 内訳画面が空(記録なし)のときにプレースホルダーを置くスロット。サマリー画面のアイテムスロットとは
+     * 別インベントリなので値自体は任意だが、row2中央(22)に置くことで見栄えを揃える。かつては
+     * [GRASS_SLOT] の値を暗黙に流用していたが、サマリー側のスロット再配置と独立に管理できるよう
+     * 独立した定数として明示的に分離している。
+     */
     internal const val PLACEHOLDER_SLOT = 22
 
     /** 内訳エントリ数から総ページ数(最低1)を求める。空でも1ページ分は確保する。 */
     internal fun totalPages(size: Int): Int = max(1, ceil(size / ITEMS_PER_PAGE.toDouble()).toInt())
 
-    fun build(targetName: String, blocksMined: Long, blocksPlaced: Long, mobKills: Long, messages: Messages): Inventory {
+    fun build(targetName: String, blocksMined: Long, blocksPlaced: Long, mobKills: Long, playTimeTicks: Long, messages: Messages): Inventory {
         val holder = StatsSummaryGuiHolder(targetName)
         val title = createTitle(targetName, messages.summaryTitleSuffix)
         val inventory = Bukkit.createInventory(holder, 54, title)
@@ -72,6 +82,15 @@ object StatsGuiFactory {
                 displayName = Component.text(messages.statLabel(StatDetailType.MOB_KILL), NamedTextColor.GOLD),
                 loreLabel = "${messages.statLabel(StatDetailType.MOB_KILL)}: ",
                 value = mobKills,
+            )
+        )
+        inventory.setItem(
+            CLOCK_SLOT,
+            createTextValueItem(
+                material = Material.CLOCK,
+                displayName = Component.text(messages.playTimeLabel, NamedTextColor.GOLD),
+                loreLabel = "${messages.playTimeLabel}: ",
+                value = messages.formatPlayTime(PlayTime.fromTicks(playTimeTicks)),
             )
         )
 
@@ -289,6 +308,17 @@ object StatsGuiFactory {
         displayName: Component,
         loreLabel: String,
         value: Long,
+    ): ItemStack = createTextValueItem(material, displayName, loreLabel, value.toString())
+
+    /**
+     * [createItem] の値が数値でない(整形済み文字列)版。累計プレイ時間のように「2日 5時間」といった
+     * すでに整形済みの表示文字列をloreの値として出すために使う。数値版 [createItem] はこの実装に委譲する。
+     */
+    private fun createTextValueItem(
+        material: Material,
+        displayName: Component,
+        loreLabel: String,
+        value: String,
     ): ItemStack {
         val item = ItemStack(material)
         item.editMeta { meta ->
@@ -296,7 +326,7 @@ object StatsGuiFactory {
             meta.lore(
                 listOf(
                     Component.text(loreLabel, NamedTextColor.GRAY)
-                        .append(Component.text(value.toString(), NamedTextColor.WHITE))
+                        .append(Component.text(value, NamedTextColor.WHITE))
                         .decoration(TextDecoration.ITALIC, false)
                 )
             )
