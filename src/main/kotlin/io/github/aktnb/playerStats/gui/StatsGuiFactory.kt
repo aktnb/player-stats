@@ -1,5 +1,6 @@
 package io.github.aktnb.playerStats.gui
 
+import io.github.aktnb.playerStats.i18n.Messages
 import io.github.aktnb.playerStats.stats.EntityStatCount
 import io.github.aktnb.playerStats.stats.MaterialStatCount
 import net.kyori.adventure.text.Component
@@ -40,9 +41,9 @@ object StatsGuiFactory {
     /** 内訳エントリ数から総ページ数(最低1)を求める。空でも1ページ分は確保する。 */
     internal fun totalPages(size: Int): Int = max(1, ceil(size / ITEMS_PER_PAGE.toDouble()).toInt())
 
-    fun build(targetName: String, blocksMined: Long, blocksPlaced: Long, mobKills: Long): Inventory {
+    fun build(targetName: String, blocksMined: Long, blocksPlaced: Long, mobKills: Long, messages: Messages): Inventory {
         val holder = StatsSummaryGuiHolder(targetName)
-        val title = createTitle(targetName, " のステータス")
+        val title = createTitle(targetName, messages.summaryTitleSuffix)
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
@@ -50,8 +51,8 @@ object StatsGuiFactory {
             PICKAXE_SLOT,
             createItem(
                 material = Material.DIAMOND_PICKAXE,
-                displayName = Component.text("採掘数", NamedTextColor.GOLD),
-                loreLabel = "採掘数: ",
+                displayName = Component.text(messages.statLabel(StatDetailType.MINING), NamedTextColor.GOLD),
+                loreLabel = "${messages.statLabel(StatDetailType.MINING)}: ",
                 value = blocksMined,
             )
         )
@@ -59,8 +60,8 @@ object StatsGuiFactory {
             GRASS_SLOT,
             createItem(
                 material = Material.GRASS_BLOCK,
-                displayName = Component.text("設置数", NamedTextColor.GOLD),
-                loreLabel = "設置数: ",
+                displayName = Component.text(messages.statLabel(StatDetailType.PLACEMENT), NamedTextColor.GOLD),
+                loreLabel = "${messages.statLabel(StatDetailType.PLACEMENT)}: ",
                 value = blocksPlaced,
             )
         )
@@ -68,8 +69,8 @@ object StatsGuiFactory {
             SWORD_SLOT,
             createItem(
                 material = Material.IRON_SWORD,
-                displayName = Component.text("キル数", NamedTextColor.GOLD),
-                loreLabel = "キル数: ",
+                displayName = Component.text(messages.statLabel(StatDetailType.MOB_KILL), NamedTextColor.GOLD),
+                loreLabel = "${messages.statLabel(StatDetailType.MOB_KILL)}: ",
                 value = mobKills,
             )
         )
@@ -83,13 +84,14 @@ object StatsGuiFactory {
         type: StatDetailType,
         breakdown: List<MaterialStatCount>,
         page: Int,
+        messages: Messages,
         sort: StatDetailSort = StatDetailSort.COUNT_DESC,
     ): Inventory {
         val sortedBreakdown = sortMaterialBreakdown(breakdown, sort)
         val holder = MaterialDetailGuiHolder(targetName, type, breakdown, clampPage(page, breakdown.size), sort)
-        return renderDetail(holder) { globalIndex ->
+        return renderDetail(holder, messages) { globalIndex ->
             val entry = sortedBreakdown[globalIndex]
-            createBreakdownItem(entry.material, entry.count, type.loreLabel)
+            createBreakdownItem(entry.material, entry.count, "${messages.statLabel(type)}: ")
         }
     }
 
@@ -106,16 +108,17 @@ object StatsGuiFactory {
         type: StatDetailType,
         breakdown: List<EntityStatCount>,
         page: Int,
+        messages: Messages,
         sort: StatDetailSort = StatDetailSort.COUNT_DESC,
     ): Inventory {
         val sortedBreakdown = sortEntityBreakdown(breakdown, sort)
         val holder = EntityDetailGuiHolder(targetName, type, breakdown, clampPage(page, breakdown.size), sort)
-        return renderDetail(holder) { globalIndex ->
+        return renderDetail(holder, messages) { globalIndex ->
             val entry = sortedBreakdown[globalIndex]
             createBreakdownItem(
                 material = EntityIconResolver.iconFor(entry.entityType),
                 count = entry.count,
-                loreLabel = type.loreLabel,
+                loreLabel = "${messages.statLabel(type)}: ",
                 // アイコンはスポーンエッグのままだが、表示名はエンティティ自体の翻訳キーを使うことで
                 // 「〇〇のスポーンエッグ」ではなくMob名(クライアントの言語設定に応じてローカライズされる)を表示する。
                 displayName = Component.translatable(entry.entityType, NamedTextColor.GOLD),
@@ -131,19 +134,19 @@ object StatsGuiFactory {
      * アイテム生成のみ [itemFactory](対象ページ内グローバルインデックス→ItemStack)で差し込む。
      * ページ範囲・ソートは既に反映済みの [holder] を用いるため、呼び出し側でクランプ済みのholderを渡すこと。
      */
-    private fun renderDetail(holder: StatsDetailGuiHolder, itemFactory: (Int) -> ItemStack): Inventory {
+    private fun renderDetail(holder: StatsDetailGuiHolder, messages: Messages, itemFactory: (Int) -> ItemStack): Inventory {
         val type = holder.type
         val sort = holder.sort
         val clampedPage = holder.page
         val breakdownSize = holder.breakdownSize
         val totalPages = totalPages(breakdownSize)
 
-        val title = createTitle(holder.targetName, " の${type.titleLabel} (${clampedPage + 1}/$totalPages ${sort.label})")
+        val title = createTitle(holder.targetName, messages.detailTitleSuffix(type, clampedPage + 1, totalPages, sort))
         val inventory = Bukkit.createInventory(holder, 54, title)
         holder.setInventory(inventory)
 
         if (breakdownSize == 0) {
-            inventory.setItem(PLACEHOLDER_SLOT, createPlaceholderItem(type.emptyLabel))
+            inventory.setItem(PLACEHOLDER_SLOT, createPlaceholderItem(messages.emptyLabel(type)))
         } else {
             val fromIndex = clampedPage * ITEMS_PER_PAGE
             val toIndex = minOf(fromIndex + ITEMS_PER_PAGE, breakdownSize)
@@ -153,27 +156,47 @@ object StatsGuiFactory {
         }
 
         if (clampedPage > 0) {
-            inventory.setItem(PREV_PAGE_SLOT, createNavItem(Material.ARROW, "◀ 前のページ"))
+            inventory.setItem(PREV_PAGE_SLOT, createNavItem(Material.ARROW, messages.navPrevPage))
         }
         if (clampedPage < totalPages - 1) {
-            inventory.setItem(NEXT_PAGE_SLOT, createNavItem(Material.ARROW, "次のページ ▶"))
+            inventory.setItem(NEXT_PAGE_SLOT, createNavItem(Material.ARROW, messages.navNextPage))
         }
-        inventory.setItem(BACK_SLOT, createNavItem(Material.OAK_DOOR, "戻る"))
+        inventory.setItem(BACK_SLOT, createNavItem(Material.OAK_DOOR, messages.navBack))
         inventory.setItem(
             COUNT_ASC_SORT_SLOT,
-            createSortItem(Material.HOPPER, "昇順", sort == StatDetailSort.COUNT_ASC)
+            createSortItem(
+                Material.HOPPER,
+                messages.sortLabel(StatDetailSort.COUNT_ASC),
+                sort == StatDetailSort.COUNT_ASC,
+                messages,
+            )
         )
         inventory.setItem(
             COUNT_DESC_SORT_SLOT,
-            createSortItem(Material.CHEST, "降順", sort == StatDetailSort.COUNT_DESC)
+            createSortItem(
+                Material.CHEST,
+                messages.sortLabel(StatDetailSort.COUNT_DESC),
+                sort == StatDetailSort.COUNT_DESC,
+                messages,
+            )
         )
         inventory.setItem(
             NAME_ASC_SORT_SLOT,
-            createSortItem(Material.NAME_TAG, "辞書順", sort == StatDetailSort.NAME_ASC)
+            createSortItem(
+                Material.NAME_TAG,
+                messages.sortLabel(StatDetailSort.NAME_ASC),
+                sort == StatDetailSort.NAME_ASC,
+                messages,
+            )
         )
         inventory.setItem(
             NAME_DESC_SORT_SLOT,
-            createSortItem(Material.WRITABLE_BOOK, "辞書逆順", sort == StatDetailSort.NAME_DESC)
+            createSortItem(
+                Material.WRITABLE_BOOK,
+                messages.sortLabel(StatDetailSort.NAME_DESC),
+                sort == StatDetailSort.NAME_DESC,
+                messages,
+            )
         )
 
         return inventory
@@ -244,15 +267,17 @@ object StatsGuiFactory {
         return item
     }
 
-    private fun createSortItem(material: Material, name: String, active: Boolean): ItemStack {
+    private fun createSortItem(material: Material, name: String, active: Boolean, messages: Messages): ItemStack {
         val item = ItemStack(material)
         item.editMeta { meta ->
             val color = if (active) NamedTextColor.GREEN else NamedTextColor.YELLOW
             meta.displayName(Component.text(name, color).decoration(TextDecoration.ITALIC, false))
             meta.lore(
                 listOf(
-                    Component.text(if (active) "現在の並び順" else "クリックで並び替え", NamedTextColor.GRAY)
-                        .decoration(TextDecoration.ITALIC, false)
+                    Component.text(
+                        if (active) messages.sortStateActive else messages.sortStateInactive,
+                        NamedTextColor.GRAY,
+                    ).decoration(TextDecoration.ITALIC, false)
                 )
             )
         }
