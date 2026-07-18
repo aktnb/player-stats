@@ -175,6 +175,7 @@ class StatsGuiListener(
                     blocksMined = stats.blocksMined,
                     blocksPlaced = stats.blocksPlaced,
                     mobKills = stats.mobKills,
+                    playTimeTicks = stats.playTimeTicks,
                     messages = resolvedMessages,
                 )
                 viewer.openInventory(inventory)

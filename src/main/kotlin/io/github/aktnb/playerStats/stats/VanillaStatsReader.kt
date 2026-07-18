@@ -43,10 +43,15 @@ object VanillaStatsReader {
             mobKills += getStatisticSafely(player, Statistic.KILL_ENTITY, entityType)
         }
 
+        // `Statistic.PLAY_ONE_MINUTE` は untyped 統計(Material/EntityTypeを取らない)で、
+        // その名に反して実際の値はtick単位。日時分への分解は表示側の [PlayTime.fromTicks] に委ねる。
+        val playTimeTicks = player.getStatistic(Statistic.PLAY_ONE_MINUTE).toLong()
+
         return PlayerVanillaStats(
             blocksMined = blocksMined,
             blocksPlaced = blocksPlaced,
             mobKills = mobKills,
+            playTimeTicks = playTimeTicks,
         )
     }
 
