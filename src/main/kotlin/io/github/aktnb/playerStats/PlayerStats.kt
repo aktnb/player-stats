@@ -18,9 +18,9 @@ class PlayerStats : JavaPlugin() {
             if (statsCommand == null) {
                 logger.warning("Command 'stats' is not defined in plugin.yml")
             } else {
-                statsCommand.setExecutor(
-                    StatsCommand(plugin = this)
-                )
+                val executor = StatsCommand(plugin = this)
+                statsCommand.setExecutor(executor)
+                statsCommand.tabCompleter = executor
             }
 
             logger.info("Enabled PlayerStats")

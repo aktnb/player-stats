@@ -11,13 +11,14 @@ import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.plugin.Plugin
 import java.util.Locale
 
 class StatsCommand(
     private val plugin: Plugin
-) : CommandExecutor {
+) : CommandExecutor, TabCompleter {
 
     override fun onCommand(
         sender: CommandSender,
@@ -68,6 +69,18 @@ class StatsCommand(
 
         return true
     }
+
+    /**
+     * `/stats` は引数を取らないコマンド(自分の統計のみ表示。他プレイヤーの統計は
+     * 右クリックで閲覧する設計)のため、常に空の候補を返す。未登録の場合の
+     * Bukkitデフォルト挙動(オンラインプレイヤー名を補完してしまう)を防ぐ。
+     */
+    override fun onTabComplete(
+        sender: CommandSender,
+        command: Command,
+        alias: String,
+        args: Array<out String>
+    ): List<String> = emptyList()
 
     /**
      * [locale] から表示言語を解決し、対応する [Messages] を返す。
