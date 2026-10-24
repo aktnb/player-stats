@@ -1,8 +1,8 @@
 package io.github.aktnb.playerStats.i18n
 
+import java.util.Locale
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import java.util.Locale
 
 class LanguageResolverTest {
 

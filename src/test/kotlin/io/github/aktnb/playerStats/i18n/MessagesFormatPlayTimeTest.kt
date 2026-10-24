@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 /**
- * [Messages.formatPlayTime] は Adventure/Bukkit に依存しない純粋な文字列整形なのでJUnit可能。
- * JA/EN それぞれで単位ラベル・語順・ゼロ省略が期待どおりかを検証する。
+ * [Messages.formatPlayTime] は Adventure/Bukkit に依存しない純粋な文字列整形なのでJUnit可能。 JA/EN
+ * それぞれで単位ラベル・語順・ゼロ省略が期待どおりかを検証する。
  */
 class MessagesFormatPlayTimeTest {
 

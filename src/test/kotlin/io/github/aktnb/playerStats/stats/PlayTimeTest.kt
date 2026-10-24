@@ -43,7 +43,10 @@ class PlayTimeTest {
 
     @Test
     fun `three hours twenty minutes`() {
-        assertEquals(PlayTime(0L, 3L, 20L), PlayTime.fromTicks(3 * ticksPerHour + 20 * ticksPerMinute))
+        assertEquals(
+            PlayTime(0L, 3L, 20L),
+            PlayTime.fromTicks(3 * ticksPerHour + 20 * ticksPerMinute),
+        )
     }
 
     @Test
