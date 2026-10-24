@@ -42,7 +42,7 @@ Display text (GUI titles, item names, lore, error messages) is localized to the 
 
 `PlayerStats.kt` (the `JavaPlugin` subclass, at the package root) wires itself (as `Plugin`), `StatsCommand`, and `StatsGuiListener` together in `onEnable()`. `onDisable()` only logs, since there is no buffered state to flush.
 
-`plugin.yml` declares the `stats` command and `api-version: '26.1'`; the `main` class and `version` (templated from `gradle.properties`) are injected via Gradle's `processResources` filtering (see `build.gradle.kts`).
+`plugin.yml` declares the `stats` command and `api-version: '26.3'`; the `main` class and `version` (templated from `gradle.properties`) are injected via Gradle's `processResources` filtering (see `build.gradle.kts`).
 
 ## Known limitations / caveats
 
