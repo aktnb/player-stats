@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Preserve partially staged changes: never format over unstaged Kotlin edits.
+if ! git diff --quiet -- '*.gradle.kts' 'src/**/*.kt'; then
+    echo 'Kotlin に未ステージの変更があります。ステージまたは退避してから再コミットしてください。' >&2
+    exit 1
+fi
+
+./gradlew --quiet spotlessApply
+
+if ! git diff --quiet -- '*.gradle.kts' 'src/**/*.kt'; then
+    echo '整形しました。差分を確認して git add し、再コミットしてください。' >&2
+    exit 1
+fi

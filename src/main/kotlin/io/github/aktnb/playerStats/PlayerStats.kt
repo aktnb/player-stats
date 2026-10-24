@@ -11,7 +11,7 @@ class PlayerStats : JavaPlugin() {
         try {
             server.pluginManager.registerEvents(
                 StatsGuiListener(plugin = this),
-                this
+                this,
             )
 
             val statsCommand = getCommand("stats")

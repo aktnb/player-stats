@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.4.0"
     id("com.gradleup.shadow") version "9.4.3"
+    id("com.diffplug.spotless") version "8.10.4"
 }
 
 repositories {
@@ -17,6 +18,17 @@ dependencies {
 
 kotlin {
     jvmToolchain(25)
+}
+
+spotless {
+    kotlin {
+        target("src/**/*.kt")
+        ktfmt().kotlinlangStyle()
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        ktfmt().kotlinlangStyle()
+    }
 }
 
 tasks {
